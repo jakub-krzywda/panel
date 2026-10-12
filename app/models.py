@@ -24,7 +24,12 @@ class Source(StrEnum):
     SCREENSHOT_IMPORT = "screenshot_import"
 
 
-def _utcnow() -> dt.datetime:
+class PracticeCategory(StrEnum):
+    SPORT = "sport"
+    MUSIC = "music"
+
+
+def utcnow() -> dt.datetime:
     return dt.datetime.now(dt.UTC).replace(tzinfo=None)
 
 
@@ -66,9 +71,10 @@ class Day(Base):
 
     # Kiedy dzień został wypełniony (formularz); dla importu historycznego nieznane.
     fill_timestamp: Mapped[dt.datetime | None]
-    updated_at: Mapped[dt.datetime] = mapped_column(default=_utcnow, onupdate=_utcnow)
+    updated_at: Mapped[dt.datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
     habits: Mapped[list["HabitEntry"]] = relationship(back_populates="day", cascade="all, delete-orphan")
+    practice: Mapped[list["PracticeLog"]] = relationship(back_populates="day", cascade="all, delete-orphan")
 
 
 class HabitEntry(Base):
@@ -86,3 +92,37 @@ class HabitEntry(Base):
     value: Mapped[float] = mapped_column(Float)
 
     day: Mapped[Day] = relationship(back_populates="habits")
+
+
+class PracticeItem(Base):
+    """Pozycja „co ćwiczę” (np. „Karma Police — piano cover”). Nie kasujemy — tylko ukrywamy (active=False),
+    żeby historia i przyszłe rekomendacje miały do czego się odwoływać."""
+
+    __tablename__ = "practice_items"
+    __table_args__ = (
+        UniqueConstraint("category", "label", name="uq_practice_items_category_label"),
+        CheckConstraint(
+            f"category IN ({', '.join(repr(c.value) for c in PracticeCategory)})", name="category"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category: Mapped[str] = mapped_column(String(16))
+    label: Mapped[str] = mapped_column(String(200))
+    active: Mapped[bool] = mapped_column(default=True)
+    position: Mapped[int] = mapped_column(default=0)
+    created_at: Mapped[dt.datetime] = mapped_column(default=utcnow)
+
+
+class PracticeLog(Base):
+    """Pozycja odhaczona w danym dniu (brak wiersza = nie ćwiczone)."""
+
+    __tablename__ = "practice_log"
+    __table_args__ = (UniqueConstraint("day_id", "item_id", name="uq_practice_log_day_id_item_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day_id: Mapped[int] = mapped_column(ForeignKey("days.id", ondelete="CASCADE"), index=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("practice_items.id", ondelete="RESTRICT"), index=True)
+
+    day: Mapped[Day] = relationship(back_populates="practice")
+    item: Mapped[PracticeItem] = relationship()

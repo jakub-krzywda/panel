@@ -9,3 +9,6 @@ __pycache__/
 
 # IDE
 .idea/
+
+# Lokalna konfiguracja Claude Code (ścieżki sesji)
+.claude/

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Ustawienia — Dziennik{% endblock %}
+{% block content %}
+<h1>Ustawienia</h1>
+<p class="muted">Pozycje „co ćwiczę” pokazują się w formularzu dnia jako checkboxy. Ukrycie nie kasuje historii.</p>
+
+{% for cat, cat_items in items.items() %}
+<fieldset>
+  <legend>Co ćwiczę — {{ category_labels[cat] }}</legend>
+  <table>
+    {% for item in cat_items %}
+    <tr{% if not item.active %} class="muted"{% endif %}>
+      <td style="width:100%">
+        <form method="post" action="/config/items/{{ item.id }}" class="inline">
+          <input type="hidden" name="action" value="rename">
+          <input type="text" name="label" value="{{ item.label }}" maxlength="200" class="wide" aria-label="Nazwa">
+        </form>
+      </td>
+      <td>
+        <form method="post" action="/config/items/{{ item.id }}" class="inline">
+          <button class="small" name="action" value="up" title="W górę" {{ "disabled" if loop.first }}>↑</button>
+          <button class="small" name="action" value="down" title="W dół" {{ "disabled" if loop.last }}>↓</button>
+          {% if item.active %}
+            <button class="small secondary" name="action" value="hide">Ukryj</button>
+          {% else %}
+            <button class="small" name="action" value="show">Przywróć</button>
+          {% endif %}
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td class="muted">Brak pozycji.</td></tr>
+    {% endfor %}
+  </table>
+  <form method="post" action="/config/items">
+    <input type="hidden" name="category" value="{{ cat }}">
+    <input type="text" name="label" maxlength="200" class="wide" placeholder="Nowa pozycja, np. Gamy C-dur" required>
+    <button class="small" type="submit">Dodaj</button>
+  </form>
+  <p class="muted">Zmiana nazwy: edytuj pole i naciśnij Enter.</p>
+</fieldset>
+{% endfor %}
+{% endblock %}

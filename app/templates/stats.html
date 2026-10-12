@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Statystyki — Dziennik{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/stats.css">{% endblock %}
+{% block content %}
+<div class="viz" id="viz">
+<h1>Statystyki <span class="muted">({{ day_count }} dni)</span></h1>
+
+<h2>Kalendarz — udział wykonanych nawyków</h2>
+{% include "_calendar.html" %}
+
+<div class="tabs" style="margin-top:24px">
+  {% for key, label in periods.items() %}
+    <a href="?period={{ key }}" class="{{ 'active' if key == period }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+<h2>Nawyki — % wykonania</h2>
+<div class="multiples">
+  {% for habit in data.habits.current %}
+  <div class="card">
+    <h3>{{ habit_label(habit) }}</h3>
+    <div class="chart-sm"><canvas data-habit="{{ habit }}" role="img" aria-label="{{ habit_label(habit) }} — % wykonania"></canvas></div>
+  </div>
+  {% else %}
+  <p class="muted">Brak danych dla aktualnych nawyków.</p>
+  {% endfor %}
+</div>
+
+{% if data.habits.legacy %}
+<details id="legacy" style="margin-top:12px">
+  <summary>Dawne nawyki (z poprzednich templatów) — {{ data.habits.legacy | length }}</summary>
+  <p class="muted">Liczone tylko z dni, w których nawyk był na templacie. Puste okresy = nawyku wtedy nie było.</p>
+  <div class="multiples">
+    {% for habit in data.habits.legacy %}
+    <div class="card">
+      <h3>{{ habit_label(habit) }}</h3>
+      <div class="chart-sm"><canvas data-habit="{{ habit }}" data-lazy role="img" aria-label="{{ habit_label(habit) }} — % wykonania"></canvas></div>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<h2>Pomodoro — suma</h2>
+<div class="chart-md"><canvas id="pomodoro" role="img" aria-label="Suma pomodoro w okresie"></canvas></div>
+
+<h2>Spacery z psami</h2>
+<div class="chart-md"><canvas id="walks" role="img" aria-label="Liczba spacerów w okresie"></canvas></div>
+
+<details style="margin-top:16px">
+  <summary>Tabela</summary>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Okres</th><th>Dni z wpisem</th><th>Pomodoro</th><th>Spacery 13:00</th><th>Spacery 20:00</th></tr></thead>
+    <tbody>
+    {% for label in data.activity.labels %}
+      <tr><td>{{ label }}</td><td>{{ data.activity.days[loop.index0] }}</td><td>{{ data.activity.pomodoro[loop.index0] }}</td>
+          <td>{{ data.activity.walk_1300[loop.index0] }}</td><td>{{ data.activity.walk_2000[loop.index0] }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</details>
+</div>
+
+<script src="/static/chart-4.4.7.umd.min.js"></script>
+<script src="/static/charts.js"></script>
+<script>
+  const data = {{ data | tojson }};
+  const root = document.getElementById("viz");
+  const drawHabits = (selector) => document.querySelectorAll(selector).forEach(
+    (c) => DziennikCharts.habit(c, data.habits, c.dataset.habit, root));
+  drawHabits("canvas[data-habit]:not([data-lazy])");
+  // Ukryte wykresy mają zerowy rozmiar — rysujemy dopiero po rozwinięciu.
+  document.getElementById("legacy")?.addEventListener("toggle", (e) => e.target.open && drawHabits("canvas[data-lazy]"), { once: true });
+  DziennikCharts.pomodoro(document.getElementById("pomodoro"), data.activity, root);
+  DziennikCharts.walks(document.getElementById("walks"), data.activity, root);
+</script>
+{% endblock %}

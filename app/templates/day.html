@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ date.strftime("%d.%m.%Y") }} — Dziennik{% endblock %}
+
+{# Wartość pola: po błędzie walidacji to, co wpisał użytkownik; inaczej to, co w bazie. #}
+{% macro val(name) -%}
+  {%- if form is not none -%}{{ form.get(name, "") }}
+  {%- elif day is not none and day[name] is not none -%}
+    {%- set v = day[name] -%}{{ v.strftime("%H:%M") if v.strftime is defined else v }}
+  {%- endif -%}
+{%- endmacro %}
+{% macro checked(name, db_value) -%}
+  {%- if form is not none -%}{{ "checked" if name in form }}{%- else -%}{{ "checked" if db_value }}{%- endif -%}
+{%- endmacro %}
+
+{% block head %}{% if widget %}<link rel="stylesheet" href="/static/stats.css">{% endif %}{% endblock %}
+
+{% block content %}
+<div class="pager">
+  <a href="/day/{{ (date - timedelta(days=1)).isoformat() }}">← poprzedni</a>
+  {% if date < today %}<a href="/day/{{ (date + timedelta(days=1)).isoformat() }}">następny →</a>{% endif %}
+</div>
+
+<h1>{{ date | weekday | capitalize }}, {{ date.strftime("%d.%m.%Y") }}{% if date == today %} <span class="muted">(dziś)</span>{% endif %}</h1>
+
+{% if saved %}<p class="ok">Zapisano.</p>{% endif %}
+{% if errors %}
+  <ul class="errors">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
+{% endif %}
+{% if day is not none %}
+  <p class="muted">
+    Źródło: {{ day.source }}{% if day.template_version %} (template {{ day.template_version }}){% endif %}
+    {% if day.fill_timestamp %} · wypełniono {{ (day.fill_timestamp | local).strftime("%d.%m %H:%M") }}{% endif %}
+    {% if day.source == "pdf_import" %} · zapis zmieni źródło na „manual”{% endif %}
+  </p>
+{% endif %}
+
+<form method="post">
+  <fieldset>
+    <legend>Sen</legend>
+    <label>Zasnąłem <input type="time" name="sleep_from" value="{{ val('sleep_from') }}"></label>
+    <label>Wstałem <input type="time" name="sleep_to" value="{{ val('sleep_to') }}"></label>
+    <label>Godzin <input type="text" inputmode="decimal" name="sleep_hours" size="4" value="{{ val('sleep_hours') }}" placeholder="auto"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Nawyki</legend>
+    {% for name in habit_names %}
+      <label>
+        <input type="checkbox" name="habit.{{ name }}" {{ checked("habit." ~ name, habits.get(name)) }}>
+        {{ habit_label(name) }}{% if habits.get(name) == 0.5 and form is none %} <span class="muted">(½)</span>{% endif %}
+      </label>
+    {% endfor %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Pomodoro</legend>
+    <label><input type="number" name="pomodoro_count" min="0" max="{{ pomodoro_max }}" value="{{ val('pomodoro_count') }}"> / {{ pomodoro_max }}</label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Spacery z psami</legend>
+    <div><label><input type="checkbox" name="walk_1300" {{ checked("walk_1300", day.walk_1300 if day) }}> 13:00</label>
+      <input type="text" name="walk_1300_note" value="{{ val('walk_1300_note') }}" placeholder="las, blok…"></div>
+    <div><label><input type="checkbox" name="walk_2000" {{ checked("walk_2000", day.walk_2000 if day) }}> 20:00</label>
+      <input type="text" name="walk_2000_note" value="{{ val('walk_2000_note') }}" placeholder="las, blok…"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Ciśnienie</legend>
+    <div class="grid">
+      <span></span><span class="muted">SYS</span><span class="muted">DIA</span><span class="muted">PULS</span>
+      {% for row, label in [("morning", "rano"), ("evening", "wieczorem")] %}
+        <span>{{ label }}</span>
+        {% for col in ["sys", "dia", "pulse"] %}
+          <input type="number" name="bp_{{ row }}_{{ col }}" value="{{ val('bp_' ~ row ~ '_' ~ col) }}">
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  {% for cat, items in practice.items() %}
+  {% set note = "sport_text" if cat == "sport" else "music_text" %}
+  <fieldset>
+    <legend>Co ćwiczę — {{ category_labels[cat] }}</legend>
+    {% for item in items %}
+      <label>
+        <input type="checkbox" name="practice.{{ item.id }}" {{ checked("practice." ~ item.id, item.id in practice_done) }}>
+        {{ item.label }}{% if not item.active %} <span class="muted">(ukryta)</span>{% endif %}
+      </label>
+    {% else %}
+      <p class="muted">Brak pozycji — dopisz niżej albo w <a href="/config">ustawieniach</a>.</p>
+    {% endfor %}
+    <input class="wide" type="text" name="practice_new.{{ cat }}" maxlength="200"
+           value="{{ form.get('practice_new.' ~ cat, '') if form is not none }}"
+           placeholder="+ nowa pozycja (zostanie na liście na kolejne dni)">
+    <label class="block">Notatka <textarea name="{{ note }}">{{ val(note) }}</textarea></label>
+  </fieldset>
+  {% endfor %}
+
+  <button type="submit">Zapisz</button>
+</form>
+
+{% if widget %}{% include "_stats_widget.html" %}{% endif %}
+
+<h2>Ostatnie dni</h2>
+{% with days = recent %}{% include "_days_table.html" %}{% endwith %}
+{% endblock %}

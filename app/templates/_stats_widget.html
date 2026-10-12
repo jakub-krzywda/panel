@@ -1,0 +1,68 @@
+{# Jedna statystyka naraz na stronie głównej. Wymaga: widget ({week: data, month: data}), calendar, months, periods. #}
+<section class="viz" id="widget">
+  <h2>Statystyki</h2>
+  <div class="tabs">
+    <select id="widget-view" aria-label="Wybierz statystykę">
+      <option value="calendar">Kalendarz dni</option>
+      <option value="habits">Nawyki — % wykonania</option>
+      <option value="pomodoro">Pomodoro</option>
+      <option value="walks">Spacery z psami</option>
+    </select>
+    {% for key, label in periods.items() %}
+      <button type="button" data-period="{{ key }}">{{ label }}</button>
+    {% endfor %}
+    <a href="/stats" class="muted" style="border:0">wszystkie →</a>
+  </div>
+
+  <div data-view="calendar">{% include "_calendar.html" %}</div>
+  <div data-view="habits" hidden>
+    <div class="multiples">
+      {% for habit in widget.week.habits.current %}
+      <div class="card">
+        <h3>{{ habit_label(habit) }}</h3>
+        <div class="chart-sm"><canvas data-habit="{{ habit }}" role="img" aria-label="{{ habit_label(habit) }} — % wykonania"></canvas></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div data-view="pomodoro" hidden><div class="chart-md"><canvas id="w-pomodoro" role="img" aria-label="Suma pomodoro"></canvas></div></div>
+  <div data-view="walks" hidden><div class="chart-md"><canvas id="w-walks" role="img" aria-label="Spacery z psami"></canvas></div></div>
+</section>
+
+<script src="/static/chart-4.4.7.umd.min.js"></script>
+<script src="/static/charts.js"></script>
+<script>
+(() => {
+  const data = {{ widget | tojson }};
+  const root = document.getElementById("widget");
+  const select = document.getElementById("widget-view");
+  const periodButtons = root.querySelectorAll("button[data-period]");
+  const KEY = "dziennik.widget";
+
+  // Wybór pamiętany per przeglądarka; localStorage bywa niedostępny (tryb prywatny) — wtedy domyślne.
+  let state = { view: "calendar", period: "week" };
+  try { state = { ...state, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
+
+  function render() {
+    root.querySelectorAll("[data-view]").forEach((el) => { el.hidden = el.dataset.view !== state.view; });
+    periodButtons.forEach((b) => {
+      b.classList.toggle("active", b.dataset.period === state.period);
+      b.hidden = state.view === "calendar";
+    });
+    select.value = state.view;
+    const d = data[state.period];
+    if (state.view === "habits") {
+      root.querySelectorAll("canvas[data-habit]").forEach((c) => DziennikCharts.habit(c, d.habits, c.dataset.habit, root));
+    } else if (state.view === "pomodoro") {
+      DziennikCharts.pomodoro(document.getElementById("w-pomodoro"), d.activity, root);
+    } else if (state.view === "walks") {
+      DziennikCharts.walks(document.getElementById("w-walks"), d.activity, root);
+    }
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+  }
+
+  select.addEventListener("change", () => { state.view = select.value; render(); });
+  periodButtons.forEach((b) => b.addEventListener("click", () => { state.period = b.dataset.period; render(); }));
+  render();
+})();
+</script>

@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Historia — Dziennik{% endblock %}
+{% block content %}
+<h1>Historia <span class="muted">({{ days | length }} dni)</span></h1>
+{% include "_days_table.html" %}
+{% endblock %}

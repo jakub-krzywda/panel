@@ -1,0 +1,34 @@
+{# Kalendarz dni (udział wykonanych nawyków). Wymaga: calendar, months. #}
+{% if calendar %}
+<div class="table-wrap">
+<table class="cal" aria-label="Kalendarz dni">
+  <tr>
+    <th></th>
+    {% for week in calendar %}
+      {% set first = week | select | first %}
+      <th>{% if first and (loop.first or first.date.day <= 7) %}{{ months[first.date.month - 1] }}{% endif %}</th>
+    {% endfor %}
+  </tr>
+  {% for row in range(7) %}
+  <tr>
+    <th>{{ ["pn", "", "śr", "", "pt", "", "nd"][row] }}</th>
+    {% for week in calendar %}
+      {% set cell = week[row] %}
+      <td>
+        {% if cell %}
+          {% set desc = cell.date.strftime("%d.%m") ~ ": " ~ (((cell.score * 100) | round | int) ~ "% nawyków" if cell.score is not none else ("wpis bez nawyków" if cell.has_entry else "brak wpisu")) %}
+          <a class="lvl-{{ cell.level }}" href="/day/{{ cell.date.isoformat() }}" title="{{ desc }}" aria-label="{{ desc }}"></a>
+        {% endif %}
+      </td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+<div class="cal-legend">
+  brak wpisu <span class="lvl-0"></span>
+  &nbsp; mniej <span class="lvl-1"></span><span class="lvl-2"></span><span class="lvl-3"></span><span class="lvl-4"></span> więcej
+</div>
+{% else %}
+<p class="muted">Brak danych.</p>
+{% endif %}

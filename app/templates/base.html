@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Dziennik{% endblock %}</title>
+  <style>
+    :root { --fg: #222; --muted: #777; --line: #ddd; --accent: #2e7d32; --bad: #c62828; --bg: #fff; --card: #f7f7f5; --link: #1565c0; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #e6e6e6; --muted: #999; --line: #3a3a3a; --accent: #81c784; --bad: #ef9a9a; --bg: #181818; --card: #222; --link: #90caf9; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0 auto; max-width: 760px; padding: 16px; font: 16px/1.45 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+    a { color: var(--link); }
+    nav { display: flex; gap: 16px; align-items: baseline; margin-bottom: 16px; }
+    nav a { color: var(--fg); }
+    h1 { font-size: 1.4rem; margin: 0 0 12px; }
+    fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 12px; padding: 10px 12px; background: var(--card); }
+    legend { font-weight: 600; padding: 0 4px; }
+    label { display: inline-flex; gap: 6px; align-items: center; margin: 4px 14px 4px 0; }
+    input[type=text], input[type=number], input[type=time], textarea { font: inherit; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
+    input[type=number] { width: 5.5em; }
+    input[type=checkbox] { width: 20px; height: 20px; }
+    textarea { width: 100%; min-height: 3.5em; }
+    .wide { width: 100%; margin-top: 6px; }
+    button.small { padding: 4px 10px; margin: 6px 4px 0 0; }
+    button.secondary { background: var(--line); color: var(--fg); }
+    button:disabled { opacity: .35; cursor: default; }
+    form.inline { margin: 0; }
+    label.block { display: block; margin-top: 8px; }
+    nav { flex-wrap: wrap; }
+    .grid { display: grid; grid-template-columns: auto repeat(3, minmax(0, 6em)); gap: 6px 10px; align-items: center; }
+    .muted { color: var(--muted); font-size: .9em; }
+    .ok { color: var(--accent); }
+    .errors { color: var(--bad); }
+    button { font: inherit; padding: 8px 20px; border: 0; border-radius: 6px; background: var(--accent); color: var(--bg); cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; font-size: .92em; }
+    th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    .table-wrap { overflow-x: auto; }
+    .pager { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <nav>
+    <strong>Dziennik</strong>
+    <a href="/">Dziś</a>
+    <a href="/history">Historia</a>
+    <a href="/stats">Statystyki</a>
+    <a href="/config">Ustawienia</a>
+  </nav>
+  {% block content %}{% endblock %}
+</body>
+</html>
