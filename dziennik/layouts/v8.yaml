@@ -1,0 +1,40 @@
+# Template v8 — współrzędne w punktach PDF z Tydzien_Template_v8.pdf.
+name: v8
+template_pdf: "data/_GoodNotes templates/Tydzien_Template_v8.pdf"
+template_page: 0
+label_region: [32.0, 724.0, 563.3, 750.0]
+checkbox_margin_pt: 3        # ptaszki często wychodzą poza kratkę
+checkbox_threshold: 0.015    # udział pikseli tuszu w ROI; puste ~0.0, zaznaczone >= ~0.03
+cell_threshold: 0.004        # komórka tabeli nawyków (v2–v6) jest dużo większa niż kratka
+text_ink_threshold: 0.003
+
+checkboxes:
+  habits.trening: [42.0, 731.0, 54.0, 743.0]
+  habits.muzyka: [117.8, 731.0, 129.8, 743.0]
+  habits.czytanie: [192.0, 731.0, 204.0, 743.0]
+  habits.sen_przed_0: [272.0, 731.0, 284.0, 743.0]
+  habits.nie_palenie: [381.1, 731.0, 393.1, 743.0]
+  pomodoro.1: [40.0, 677.0, 54.0, 691.0]
+  pomodoro.2: [59.0, 677.0, 73.0, 691.0]
+  pomodoro.3: [78.0, 677.0, 92.0, 691.0]
+  pomodoro.4: [97.0, 677.0, 111.0, 691.0]
+  pomodoro.5: [116.0, 677.0, 130.0, 691.0]
+  pomodoro.6: [135.0, 677.0, 149.0, 691.0]
+  pomodoro.7: [154.0, 677.0, 168.0, 691.0]
+  pomodoro.8: [173.0, 677.0, 187.0, 691.0]
+  walks.1300: [225.9, 581.0, 236.9, 592.0]
+  walks.2000: [225.9, 605.0, 236.9, 616.0]
+
+text_fields:
+  date: [35.0, 36.0, 110.0, 73.0]
+  sleep_from: [120.0, 36.0, 205.6, 73.0]
+  sleep_to: [215.6, 36.0, 290.6, 73.0]
+  sleep_hours: [300.6, 36.0, 407.5, 73.0]
+  walks.1300_note: [270.9, 574.0, 368.3, 598.0]
+  walks.2000_note: [270.9, 598.0, 368.3, 622.0]
+  sport_text: [35.0, 575.0, 210.9, 633.0]
+  music_text: [380.3, 575.0, 556.3, 633.0]
+
+bp_rows:
+  morning: [392.9, 673.0, 559.3, 691.5]
+  evening: [392.9, 691.5, 559.3, 710.0]
