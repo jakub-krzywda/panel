@@ -122,3 +122,15 @@ def calendar(days: Sequence[Day], end: dt.date) -> list[list[dict | None]]:
         weeks.append(week)
         week_start += dt.timedelta(days=7)
     return weeks
+
+
+def blood_pressure(days: Sequence[Day]) -> dict:
+    """Pomiary ciśnienia — tylko dni z odczytem (oś kategorii po datach, bez okresów)."""
+    measured = [d for d in days if d.bp_morning_sys or d.bp_evening_sys]
+    return {
+        "labels": [d.date.strftime("%d.%m") for d in measured],
+        "morning_sys": [d.bp_morning_sys for d in measured],
+        "morning_dia": [d.bp_morning_dia for d in measured],
+        "evening_sys": [d.bp_evening_sys for d in measured],
+        "evening_dia": [d.bp_evening_dia for d in measured],
+    }

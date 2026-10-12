@@ -69,6 +69,10 @@ class Day(Base):
     # Dla importów: plik źródłowy, pewności pól, flagi inferred/unverified.
     import_meta: Mapped[dict | None] = mapped_column(JSON)
 
+    # Snapshot z Open-Meteo zapisany razem z dniem (app/weather.py) — nie pobierany na żywo z dashboardu.
+    weather_api: Mapped[dict | None] = mapped_column(JSON)
+    weather_fetched_at: Mapped[dt.datetime | None]
+
     # Kiedy dzień został wypełniony (formularz); dla importu historycznego nieznane.
     fill_timestamp: Mapped[dt.datetime | None]
     updated_at: Mapped[dt.datetime] = mapped_column(default=utcnow, onupdate=utcnow)

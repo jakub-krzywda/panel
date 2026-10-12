@@ -2,7 +2,7 @@
 <div class="table-wrap">
 <table>
   <thead>
-    <tr><th>Data</th><th>Nawyki</th><th>Pomodoro</th><th>Spacery</th><th>Ciśnienie rano</th><th>Źródło</th></tr>
+    <tr><th>Data</th><th>Nawyki</th><th>Pomodoro</th><th>Spacery</th><th>Ciśnienie rano</th><th>Pogoda</th><th>Źródło</th></tr>
   </thead>
   <tbody>
   {% for d in days %}
@@ -12,10 +12,11 @@
       <td>{{ d.pomodoro_count if d.pomodoro_count is not none else "–" }}</td>
       <td>{{ "13" if d.walk_1300 }}{{ " · " if d.walk_1300 and d.walk_2000 }}{{ "20" if d.walk_2000 }}{{ "–" if not (d.walk_1300 or d.walk_2000) }}</td>
       <td>{% if d.bp_morning_sys %}{{ d.bp_morning_sys }}/{{ d.bp_morning_dia or "?" }} {{ d.bp_morning_pulse or "" }}{% else %}–{% endif %}</td>
+      <td>{% if d.weather_api %}{{ d.weather_api.daily.temperature_2m_max | num }}° {{ weather_desc(d.weather_api.daily.weather_code) }}{% else %}–{% endif %}</td>
       <td class="muted">{{ d.source }}{% if d.template_version %} ({{ d.template_version }}){% endif %}</td>
     </tr>
   {% else %}
-    <tr><td colspan="6" class="muted">Brak wpisów.</td></tr>
+    <tr><td colspan="7" class="muted">Brak wpisów.</td></tr>
   {% endfor %}
   </tbody>
 </table>

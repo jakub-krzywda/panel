@@ -15,7 +15,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import practice, stats
+from app import practice, stats, weather
 from app.db import SessionLocal
 from app.forms import CURRENT_HABITS, POMODORO_MAX, habit_label, habit_order, habits_for_form, parse_day_form, save_manual_day
 from app.models import Day, PracticeCategory, PracticeItem
@@ -24,6 +24,9 @@ app = FastAPI(title="Dziennik")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.globals["habit_label"] = habit_label
+templates.env.globals["weather_desc"] = weather.describe
+# Liczba albo „–” (snapshot pogody może nie mieć któregoś pola).
+templates.env.filters["num"] = lambda v, digits=0: f"{v:.{digits}f}" if isinstance(v, int | float) else "–"
 
 WEEKDAYS_PL = ["poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela"]
 templates.env.filters["weekday"] = lambda d: WEEKDAYS_PL[d.weekday()]
@@ -53,7 +56,7 @@ def _stats_data(days: list[Day], period: str) -> dict:
     names = sorted(habits["series"], key=habit_order)
     habits["current"] = [h for h in names if h in CURRENT_HABITS]
     habits["legacy"] = [h for h in names if h not in CURRENT_HABITS]
-    return {"habits": habits, "activity": stats.activity(days, period)}
+    return {"habits": habits, "activity": stats.activity(days, period), "bp": stats.blood_pressure(days)}
 
 
 def _render_day(request: Request, session: Session, date: dt.date, *, errors=(), form=None, saved=False, status=200):
@@ -110,7 +113,12 @@ async def day_save(request: Request, date: dt.date, session: Session = Depends(g
     columns, habits, errors = parse_day_form(form, habits_for_form(_day(session, date)))
     if errors:
         return _render_day(request, session, date, errors=errors, form=form, status=400)
-    save_manual_day(session, date, columns, habits, practice.parse_practice_form(form))
+    # Pogoda: dziś zawsze świeża (warunki w chwili zapisu), dla innych dni tylko gdy jej brak.
+    existing = _day(session, date)
+    snapshot = None
+    if date == today() or existing is None or existing.weather_api is None:
+        snapshot = await weather.snapshot(date, today())
+    save_manual_day(session, date, columns, habits, practice.parse_practice_form(form), snapshot)
     return RedirectResponse(f"/day/{date.isoformat()}?saved=1", status_code=303)
 
 

@@ -47,6 +47,12 @@
 <h2>Spacery z psami</h2>
 <div class="chart-md"><canvas id="walks" role="img" aria-label="Liczba spacerów w okresie"></canvas></div>
 
+<h2>Ciśnienie krwi</h2>
+{% if data.bp.labels %}
+<div class="chart-md"><canvas id="bp" role="img" aria-label="Ciśnienie krwi — pomiary"></canvas></div>
+<p class="muted">Tylko dni z pomiarem. Wartości z importu odczytane OCR — niezweryfikowane.</p>
+{% else %}<p class="muted">Brak pomiarów.</p>{% endif %}
+
 <details style="margin-top:16px">
   <summary>Tabela</summary>
   <div class="table-wrap">
@@ -75,5 +81,7 @@
   document.getElementById("legacy")?.addEventListener("toggle", (e) => e.target.open && drawHabits("canvas[data-lazy]"), { once: true });
   DziennikCharts.pomodoro(document.getElementById("pomodoro"), data.activity, root);
   DziennikCharts.walks(document.getElementById("walks"), data.activity, root);
+  const bp = document.getElementById("bp");
+  if (bp) DziennikCharts.bloodPressure(bp, data.bp, root);
 </script>
 {% endblock %}

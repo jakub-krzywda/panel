@@ -7,6 +7,7 @@
       <option value="habits">Nawyki — % wykonania</option>
       <option value="pomodoro">Pomodoro</option>
       <option value="walks">Spacery z psami</option>
+      <option value="bp">Ciśnienie krwi</option>
     </select>
     {% for key, label in periods.items() %}
       <button type="button" data-period="{{ key }}">{{ label }}</button>
@@ -27,6 +28,7 @@
   </div>
   <div data-view="pomodoro" hidden><div class="chart-md"><canvas id="w-pomodoro" role="img" aria-label="Suma pomodoro"></canvas></div></div>
   <div data-view="walks" hidden><div class="chart-md"><canvas id="w-walks" role="img" aria-label="Spacery z psami"></canvas></div></div>
+  <div data-view="bp" hidden><div class="chart-md"><canvas id="w-bp" role="img" aria-label="Ciśnienie krwi"></canvas></div></div>
 </section>
 
 <script src="/static/chart-4.4.7.umd.min.js"></script>
@@ -47,7 +49,7 @@
     root.querySelectorAll("[data-view]").forEach((el) => { el.hidden = el.dataset.view !== state.view; });
     periodButtons.forEach((b) => {
       b.classList.toggle("active", b.dataset.period === state.period);
-      b.hidden = state.view === "calendar";
+      b.hidden = state.view === "calendar" || state.view === "bp";
     });
     select.value = state.view;
     const d = data[state.period];
@@ -57,6 +59,8 @@
       DziennikCharts.pomodoro(document.getElementById("w-pomodoro"), d.activity, root);
     } else if (state.view === "walks") {
       DziennikCharts.walks(document.getElementById("w-walks"), d.activity, root);
+    } else if (state.view === "bp") {
+      DziennikCharts.bloodPressure(document.getElementById("w-bp"), d.bp, root);
     }
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
   }

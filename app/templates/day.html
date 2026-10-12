@@ -33,6 +33,16 @@
     {% if day.source == "pdf_import" %} · zapis zmieni źródło na „manual”{% endif %}
   </p>
 {% endif %}
+{% if day is not none and day.weather_api %}
+  {% set w = day.weather_api.daily %}{% set c = day.weather_api.current %}
+  <p class="weather">
+    <strong>Pogoda:</strong> {{ weather_desc(w.weather_code) }}, {{ w.temperature_2m_min | num }}–{{ w.temperature_2m_max | num }} °C,
+    opady {{ w.precipitation_sum | num(1) }} mm, słońce {{ (w.sunshine_duration / 3600) | num(1) if w.sunshine_duration is number else "–" }} h,
+    ciśnienie {{ w.pressure_msl_mean | num }} hPa
+    {% if c %}<br><span class="muted">przy zapisie: {{ c.temperature_2m | num(1) }} °C (odczuwalna {{ c.apparent_temperature | num(1) }}), {{ weather_desc(c.weather_code) }}</span>{% endif %}
+    <span class="muted"> · Open-Meteo, {{ day.weather_api.location }}</span>
+  </p>
+{% endif %}
 
 <form method="post">
   <fieldset>

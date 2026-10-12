@@ -88,5 +88,27 @@ window.DziennikCharts = (() => {
     });
   }
 
-  return { habit, pomodoro, walks };
+  // Ciśnienie: SYS i DIA jedną skalą (ta sama jednostka); rano linia ciągła, wieczorem przerywana.
+  function bloodPressure(canvas, data, root) {
+    const t = theme(root); base(t);
+    const line = (label, values, color, dashed) => ({
+      label, data: values, borderColor: color, backgroundColor: color, borderWidth: 2,
+      borderDash: dashed ? [6, 4] : [], pointRadius: 4, pointHoverRadius: 6, spanGaps: false,
+    });
+    draw(canvas, {
+      type: "line",
+      data: { labels: data.labels, datasets: [
+        line("SYS rano", data.morning_sys, t.series1, false),
+        line("DIA rano", data.morning_dia, t.series2, false),
+        line("SYS wieczorem", data.evening_sys, t.series1, true),
+        line("DIA wieczorem", data.evening_dia, t.series2, true),
+      ] },
+      options: {
+        plugins: { legend: { position: "top", align: "start", labels: { boxWidth: 24, boxHeight: 2 } } },
+        scales: { x: xAxis(t), y: { suggestedMin: 50, suggestedMax: 160, title: { display: true, text: "mmHg" } } },
+      },
+    });
+  }
+
+  return { habit, pomodoro, walks, bloodPressure };
 })();

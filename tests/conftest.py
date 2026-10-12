@@ -21,3 +21,17 @@ def engine(tmp_path):
     event.listen(eng, "connect", lambda conn, _: conn.execute("PRAGMA foreign_keys = ON"))
     yield eng
     eng.dispose()
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Żaden test nie idzie do sieci: domyślnie każde zapytanie o pogodę kończy się błędem połączenia."""
+    import httpx
+
+    from app import weather
+
+    def refuse(request):
+        raise httpx.ConnectError("sieć wyłączona w testach", request=request)
+
+    monkeypatch.setattr(weather, "TRANSPORT", httpx.MockTransport(refuse))
+    weather._cache.clear()
