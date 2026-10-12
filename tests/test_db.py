@@ -4,34 +4,17 @@ import datetime as dt
 
 import pytest
 from alembic import command
-from alembic.config import Config
-from sqlalchemy import create_engine, event, inspect
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db import ROOT
 from app.models import Day, HabitEntry
-
-
-def _alembic(url: str) -> Config:
-    cfg = Config(str(ROOT / "alembic.ini"))
-    cfg.set_main_option("sqlalchemy.url", url)
-    return cfg
-
-
-@pytest.fixture
-def engine(tmp_path):
-    url = f"sqlite:///{tmp_path / 'test.sqlite'}"
-    command.upgrade(_alembic(url), "head")
-    eng = create_engine(url)
-    event.listen(eng, "connect", lambda conn, _: conn.execute("PRAGMA foreign_keys = ON"))
-    yield eng
-    eng.dispose()
+from tests.conftest import alembic_config
 
 
 def test_migration_roundtrip(tmp_path):
     url = f"sqlite:///{tmp_path / 'rt.sqlite'}"
-    cfg = _alembic(url)
+    cfg = alembic_config(url)
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
@@ -40,7 +23,7 @@ def test_migration_roundtrip(tmp_path):
 
 def test_models_match_migrations(tmp_path):
     url = f"sqlite:///{tmp_path / 'chk.sqlite'}"
-    cfg = _alembic(url)
+    cfg = alembic_config(url)
     command.upgrade(cfg, "head")
     command.check(cfg)  # rzuca, jeśli modele różnią się od migracji
 
