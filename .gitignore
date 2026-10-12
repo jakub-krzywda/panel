@@ -1,0 +1,11 @@
+# Prywatne dane dziennika (backup, templaty) — nigdy do repo
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# IDE
+.idea/
