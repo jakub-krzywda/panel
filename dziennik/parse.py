@@ -204,6 +204,7 @@ def parse_image(
         "data": data,
         "fields": fields,
         "low_confidence": [n for n, f in fields.items() if f.get("confidence", 1.0) < LOW_CONFIDENCE],
+        "ocr": ocr,  # False: ciśnienie, daty i tekst nie zostały odczytane (np. brak Apple Vision poza macOS)
     }
 
 

@@ -103,3 +103,20 @@ def test_bad_uploads(client, content, message):
 def test_match_practice(text, expected):
     items = [PracticeItem(id=i, category="music", label=l) for i, l in enumerate(["Karma Police", "Gamy", "Etiuda"])]
     assert [i.label for i in match_practice(text, items)] == expected
+
+
+def test_uploads_are_saved_even_when_unreadable(client, tmp_path):
+    client.post(f"/day/{TODAY}/screenshot", files={"file": ("x.png", b"not an image", "image/png")})
+    saved = list((tmp_path / "screenshots").iterdir())
+    assert len(saved) == 1 and saved[0].name.startswith(f"{TODAY}_") and saved[0].suffix == ".bin"
+
+
+@needs_template
+def test_saved_upload_keeps_png_extension(client, tmp_path):
+    client.post(f"/day/{TODAY}/screenshot", files={"file": ("s.png", png(), "image/png")})
+    assert [p.suffix for p in (tmp_path / "screenshots").iterdir()] == [".png"]
+
+
+def test_empty_upload_is_not_saved(client, tmp_path):
+    client.post(f"/day/{TODAY}/screenshot", files={"file": ("x.png", b"", "image/png")})
+    assert not (tmp_path / "screenshots").exists()

@@ -1,7 +1,9 @@
 """Import ze zrzutu ekranu → wypełniony formularz dnia (bez zapisu; użytkownik sprawdza i zapisuje)."""
 
+import datetime as dt
 import re
 from difflib import SequenceMatcher
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -23,6 +25,21 @@ FIELD_MAP = {
 
 class ScreenshotError(ValueError):
     pass
+
+
+def save_upload(data: bytes, date: dt.date, directory: Path) -> Path | None:
+    """Zapis wgranego zrzutu (także nieudanego — te najbardziej przydają się do kalibracji parsera).
+
+    Dane zostają na serwerze (data/ jest poza repo). Zwraca ścieżkę albo None dla pustego/za dużego pliku.
+    """
+    if not data or len(data) > MAX_UPLOAD_BYTES:
+        return None
+    ext = ".png" if data[:8] == b"\x89PNG\r\n\x1a\n" else ".jpg" if data[:3] == b"\xff\xd8\xff" else ".bin"
+    directory.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    path = directory / f"{date.isoformat()}_{stamp}{ext}"
+    path.write_bytes(data)
+    return path
 
 
 def decode_image(data: bytes) -> np.ndarray:

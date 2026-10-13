@@ -33,10 +33,11 @@
   </div>
   <div class="day-nav">
     <form method="post" action="/day/{{ date.isoformat() }}/screenshot" enctype="multipart/form-data" id="shot-form">
-      <label class="btn sm" title="Zrzut dolnej części strony (pod „DANE PARSOWALNE”). Możesz też wkleić ⌘V.">
-        Import ze zrzutu
-        <input type="file" name="file" accept="image/png,image/jpeg" hidden>
+      <label class="btn sm" title="Zrzut dolnej części strony (pod „DANE PARSOWALNE”).">
+        Dodaj zrzut / zdjęcie
+        <input type="file" name="file" accept="image/*" hidden>
       </label>
+      <span class="muted small paste-hint">lub wklej ze schowka (⌘V / Ctrl+V)</span>
     </form>
     <a class="btn ghost sm" href="/day/{{ (date - timedelta(days=1)).isoformat() }}">← poprzedni</a>
     {% if date < today %}<a class="btn ghost sm" href="/day/{{ (date + timedelta(days=1)).isoformat() }}">następny →</a>{% endif %}
@@ -87,6 +88,7 @@
         Wczytano ze zrzutu — <strong>sprawdź i kliknij „Zapisz”</strong>. Nic nie zostało jeszcze zapisane.
         {% if uncertain %}Pola do sprawdzenia są obrysowane.{% endif %}
         {% if imported.missing %}<br><span class="small">Poza kadrem (bez zmian): {{ imported.missing | join(", ") }}</span>{% endif %}
+        {% if not imported.ocr %}<br><span class="small">Rozpoznawanie pisma niedostępne na tym serwerze — ciśnienie i notatki wpisz ręcznie (kratki odczytane).</span>{% endif %}
       </div>
     {% endif %}
     {% if errors %}

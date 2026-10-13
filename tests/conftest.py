@@ -35,3 +35,11 @@ def no_network(monkeypatch):
 
     monkeypatch.setattr(weather, "TRANSPORT", httpx.MockTransport(refuse))
     weather._cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def isolated_settings(monkeypatch, tmp_path):
+    """Testy nie piszą do data/ i nie wymagają hasła (chyba że test ustawi je sam)."""
+    monkeypatch.setenv("DZIENNIK_SCREENSHOTS_DIR", str(tmp_path / "screenshots"))
+    monkeypatch.delenv("DZIENNIK_PASSWORD", raising=False)
+    monkeypatch.delenv("DZIENNIK_USER", raising=False)

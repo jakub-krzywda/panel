@@ -12,3 +12,6 @@ __pycache__/
 
 # Lokalna konfiguracja Claude Code (ścieżki sesji)
 .claude/
+
+# Sekrety serwera (hasło itp.) — patrz deploy/env.example
+.env

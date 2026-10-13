@@ -73,7 +73,10 @@ To rozszerzenie parsera z Sprintu 1: zamiast strony PDF, pojedyncze zdjęcie z t
 
 ### Sprint 5+ — Deployment na RPi, Garmin, rekomendacje
 
-Nie planujemy teraz. Agent nie powinien proaktywnie przygotowywać infrastruktury pod to.
+- **Deploy na RPi — zdecydowany 2026-10-13:** systemd + uv (bez Dockera), baza przeniesiona z Maca na RPi
+  (RPi = główna baza), HTTP Basic z hasłem w `.env`. Instrukcja krok po kroku: `deploy/README.md`.
+  Na RPi nie ma OCR (Apple Vision tylko na macOS) — import ze zrzutu czyta tylko kratki.
+- Garmin, rekomendacje — nie planujemy teraz. Agent nie powinien proaktywnie przygotowywać infrastruktury pod to.
 
 ## Dane do zbierania (specyfikacja z template'u v8)
 

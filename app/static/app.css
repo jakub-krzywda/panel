@@ -161,3 +161,5 @@ td.num { font-variant-numeric: tabular-nums; }
 .forecast-facts strong { color: var(--fg); }
 .forecast-hours { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; overflow-x: auto; }
 .forecast-hours li { display: grid; justify-items: center; gap: 2px; min-width: 58px; padding: 8px 6px; border-radius: 10px; background: var(--surface-2); }
+#shot-form { display: inline-flex; align-items: center; gap: 8px; }
+@media (hover: none) { .paste-hint { display: none; } }  /* telefon/tablet bez klawiatury */

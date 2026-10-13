@@ -5,26 +5,51 @@
 """
 
 import asyncio
+import base64
 import datetime as dt
+import logging
+import secrets
 from collections.abc import Iterator
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app import practice, stats, weather
+from app import practice, settings, stats, weather
 from app.db import SessionLocal
 from app.forms import CURRENT_HABITS, POMODORO_MAX, habit_label, habit_order, habits_for_form, parse_day_form, save_manual_day
 from app.models import Day, PracticeCategory, PracticeItem, Source
-from app.screenshot_import import ScreenshotError, decode_image, prefill
+from app.screenshot_import import ScreenshotError, decode_image, prefill, save_upload
 from dziennik.screenshot import AlignmentError, parse_screenshot
 
 app = FastAPI(title="Dziennik")
+log = logging.getLogger(__name__)
+
+
+def _authorized(header: str | None, user: str, password: str) -> bool:
+    if not header or not header.startswith("Basic "):
+        return False
+    try:
+        given_user, _, given_password = base64.b64decode(header[6:]).decode().partition(":")
+    except ValueError:
+        return False
+    return secrets.compare_digest(given_user, user) & secrets.compare_digest(given_password, password)
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    """HTTP Basic dla całej aplikacji, gdy ustawiono DZIENNIK_PASSWORD (na RPi w sieci domowej)."""
+    creds = settings.auth_credentials()
+    if creds and not _authorized(request.headers.get("authorization"), *creds):
+        return Response("Wymagane logowanie.", status_code=401,
+                        headers={"WWW-Authenticate": 'Basic realm="Dziennik", charset="UTF-8"'})
+    return await call_next(request)
+
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -150,15 +175,22 @@ async def day_screenshot(
 ):
     """Zrzut dolnej części strony v8 → formularz wypełniony do sprawdzenia. Nic nie jest zapisywane."""
     forecast = await _forecast(date)
+    data = await file.read()
+    if saved_to := save_upload(data, date, settings.screenshots_dir()):
+        log.info("Zapisano zrzut %s", saved_to)
     try:
-        image = decode_image(await file.read())
+        image = decode_image(data)
         result = await run_in_threadpool(parse_screenshot, image)  # dopasowanie + OCR trwają 1–2 s
     except (ScreenshotError, AlignmentError) as e:
         return _render_day(request, session, date, errors=[str(e)], forecast=forecast, status=400)
     day = _day(session, date)
     items = {c.value: practice.items_for_form(session, day, c) for c in PracticeCategory}
     form, uncertain = prefill(result, day, items)
-    imported = {"score": result["alignment"]["score"], "missing": [m for m in result["missing"] if not m.startswith(("date", "sleep"))]}
+    imported = {
+        "score": result["alignment"]["score"],
+        "missing": [m for m in result["missing"] if not m.startswith(("date", "sleep"))],
+        "ocr": result.get("ocr", False),
+    }
     return _render_day(request, session, date, form=form, forecast=forecast, uncertain=uncertain, imported=imported)
 
 

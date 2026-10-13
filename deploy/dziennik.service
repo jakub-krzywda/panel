@@ -1,0 +1,25 @@
+# Usługa systemd dla serwisu Dziennik na Raspberry Pi.
+# Ścieżki i użytkownik zakładają klon repo w /home/pi/panel — dostosuj przed instalacją (deploy/README.md).
+#   sudo cp deploy/dziennik.service /etc/systemd/system/dziennik.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now dziennik
+
+[Unit]
+Description=Dziennik (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/panel
+# Hasło i ustawienia — plik poza repo, prawa 600 (patrz deploy/env.example)
+EnvironmentFile=/home/pi/panel/.env
+# „Dziś” i daty pogody liczone w czasie lokalnym
+Environment=TZ=Europe/Warsaw
+ExecStart=/home/pi/panel/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
