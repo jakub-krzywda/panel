@@ -15,7 +15,7 @@ WorkingDirectory=/home/pi/panel
 EnvironmentFile=/home/pi/panel/.env
 # „Dziś” i daty pogody liczone w czasie lokalnym
 Environment=TZ=Europe/Warsaw
-ExecStart=/home/pi/panel/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+ExecStart=/home/pi/panel/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8002
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

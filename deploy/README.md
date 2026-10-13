@@ -1,7 +1,7 @@
 # Deploy na Raspberry Pi
 
 Decyzje (2026-10-13): **systemd + uv** (bez Dockera), **baza przenoszona z Maca na RPi** (od tej chwili RPi jest
-główną bazą), **HTTP Basic** z hasłem w `.env`. Serwis słucha na porcie 8000 w sieci domowej.
+główną bazą), **HTTP Basic** z hasłem w `.env`. Serwis słucha na porcie **8002** w sieci domowej (8000 na RPi zajmuje inna usługa).
 
 Zasady jak w CLAUDE.md: komendy zmieniające system (sudo, systemd, kopiowanie bazy) — najpierw pokaż, potem wykonaj
 po OK. Bazę zawsze kopiuj, nigdy nie nadpisuj bez backupu.
@@ -37,7 +37,7 @@ Na Macu (serwis lokalny zatrzymany, żeby baza nie zmieniała się w trakcie):
 ssh pi@<rpi> "mkdir -p ~/panel/data"
 sqlite3 data/dziennik.sqlite ".backup data/dziennik-do-rpi.sqlite"     # spójna kopia
 rsync -av data/dziennik-do-rpi.sqlite pi@<rpi>:~/panel/data/dziennik.sqlite
-rsync -av "data/_GoodNotes templates/" "pi@<rpi>:~/panel/data/_GoodNotes templates/"
+rsync -av -s "data/_GoodNotes templates/" "pi@<rpi>:panel/data/_GoodNotes templates/"   # -s: spacja w ścieżce zdalnej
 ```
 
 Na RPi sprawdź: `sqlite3 ~/panel/data/dziennik.sqlite "select count(*) from days"` (na 2026-10-13: 77 dni).
@@ -70,12 +70,12 @@ journalctl -u dziennik -n 50 --no-pager
 ## 5. Weryfikacja
 
 ```bash
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/                     # 401 (wymaga hasła)
-curl -s -o /dev/null -w "%{http_code}\n" -u kuba:<hasło> http://localhost:8000/history   # 200
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8002/                     # 401 (wymaga hasła)
+curl -s -o /dev/null -w "%{http_code}\n" -u kuba:<hasło> http://localhost:8002/history   # 200
 hostname -I                                                                          # adres do przeglądarki
 ```
 
-W przeglądarce na Macu/iPadzie: `http://<adres-rpi>:8000/` → strona dnia, prognoza, statystyki, przycisk
+W przeglądarce na Macu/iPadzie: `http://<adres-rpi>:8002/` → strona dnia, prognoza, statystyki, przycisk
 „Dodaj zrzut / zdjęcie” (wklejanie ⌘V działa na komputerze).
 
 Wgrane zrzuty zapisują się w `~/panel/data/screenshots/` (także nieudane — do kalibracji parsera).
