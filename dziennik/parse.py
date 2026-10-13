@@ -112,7 +112,23 @@ def load_page(image_path: Path) -> np.ndarray:
 
 
 def parse_page(image_path: Path, layout: Layout, *, default_year: int = 2026, ocr: bool = True) -> dict:
-    page = load_page(image_path)
+    return parse_image(load_page(image_path), layout, source_name=image_path.name, default_year=default_year, ocr=ocr)
+
+
+def ocr_available() -> bool:
+    """Apple Vision (ocrmac) działa tylko na macOS — na innych systemach parsujemy bez OCR."""
+    try:
+        import dziennik.ocr  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def parse_image(
+    page: np.ndarray, layout: Layout, *, source_name: str, default_year: int = 2026, ocr: bool = True
+) -> dict:
+    """Jak parse_page, ale dla obrazu RGB w pamięci (np. zrzut ekranu wklejony w stronę templatu)."""
+    ocr = ocr and ocr_available()
     h, w = page.shape[:2]
     scale = layout.scale(w)
     mask = ink_mask(page, render_template(layout.template_pdf, layout.template_page, w, h))
@@ -184,7 +200,7 @@ def parse_page(image_path: Path, layout: Layout, *, default_year: int = 2026, oc
     )
 
     return {
-        "source": {"file": image_path.name, "layout": layout.name},
+        "source": {"file": source_name, "layout": layout.name},
         "data": data,
         "fields": fields,
         "low_confidence": [n for n, f in fields.items() if f.get("confidence", 1.0) < LOW_CONFIDENCE],
