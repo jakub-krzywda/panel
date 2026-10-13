@@ -52,6 +52,17 @@ def describe(code: int | None) -> str:
     return WMO_PL.get(code, "?") if code is not None else "?"
 
 
+def icon(code: int | None) -> str:
+    """Emoji dla grupy kodów WMO (tylko do wyświetlania)."""
+    if code is None:
+        return "·"
+    for codes, emoji in (((0, 1), "☀️"), ((2,), "⛅"), ((3,), "☁️"), ((45, 48), "🌫️"), ((95, 96, 99), "⛈️"),
+                         ((71, 73, 75, 77, 85, 86), "🌨️"), ((61, 63, 65, 66, 67), "🌧️")):
+        if code in codes:
+            return emoji
+    return "🌦️"  # mżawka, przelotne opady
+
+
 async def _get(url: str, params: dict) -> dict:
     key = (url, tuple(sorted(params.items())))
     hit = _cache.get(key)
@@ -104,6 +115,33 @@ async def snapshot(date: dt.date, today: dt.date) -> dict | None:
     if daily is None:
         return None
     return {"source": "open-meteo", "location": LOCATION["name"], "daily": daily, "current": current}
+
+
+FORECAST_DAILY_VARS = ["weather_code", "temperature_2m_max", "temperature_2m_min", "precipitation_sum",
+                       "precipitation_probability_max", "sunrise", "sunset"]
+FORECAST_HOURLY_VARS = ["temperature_2m", "precipitation_probability", "weather_code"]
+FORECAST_HOURS = range(6, 24, 3)
+
+
+async def forecast(day: dt.date) -> dict | None:
+    """Prognoza na dany dzień do wyświetlenia (nie zapisywana): dzienne podsumowanie + co 3 h od 6:00."""
+    try:
+        data = await _get(FORECAST_URL, {**_base_params(), "start_date": day.isoformat(), "end_date": day.isoformat(),
+                                         "daily": ",".join(FORECAST_DAILY_VARS), "hourly": ",".join(FORECAST_HOURLY_VARS)})
+        daily = {var: data["daily"][var][0] for var in FORECAST_DAILY_VARS}
+        hourly = data["hourly"]
+        hours = []
+        for i, stamp in enumerate(hourly["time"]):
+            t = dt.datetime.fromisoformat(stamp)
+            if t.date() == day and t.hour in FORECAST_HOURS:
+                hours.append({"hour": t.strftime("%H:%M"), **{var: hourly[var][i] for var in FORECAST_HOURLY_VARS}})
+    except (httpx.HTTPError, KeyError, IndexError, ValueError) as e:
+        log.warning("Prognoza niedostępna dla %s: %s", day, e)
+        return None
+    for key in ("sunrise", "sunset"):
+        if isinstance(daily[key], str):
+            daily[key] = daily[key][-5:]  # "2026-10-13T07:02" → "07:02"
+    return {"daily": daily, "hours": hours, "location": LOCATION["name"]}
 
 
 async def backfill(session, today: dt.date, *, dry_run: bool) -> int:

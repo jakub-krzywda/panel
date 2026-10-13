@@ -6,8 +6,9 @@ window.DziennikCharts = (() => {
     const css = getComputedStyle(root);
     const v = (name) => css.getPropertyValue(name).trim();
     return {
+      series: [1, 2, 3, 4, 5].map((i) => v(`--series-${i}`)),
       series1: v("--series-1"), series2: v("--series-2"), grid: v("--grid"), axis: v("--axis"),
-      surface: getComputedStyle(document.body).backgroundColor,
+      surface: v("--surface"),  // tło karty z wykresem — przerwy między słupkami w jego kolorze
     };
   }
 
@@ -110,5 +111,50 @@ window.DziennikCharts = (() => {
     });
   }
 
-  return { habit, pomodoro, walks, bloodPressure };
+  // Kilka nawyków na jednym wykresie. Kolor i kształt punktu idą za nawykiem (slot = kolejność
+  // z templatu), nie za kolejnością wyboru — wyłączenie jednego nie przemalowuje pozostałych.
+  const POINT_STYLES = ["circle", "rect", "triangle", "rectRot", "star"];
+  function habitLines(canvas, data, names, slots, labels, root) {
+    const t = theme(root); base(t);
+    draw(canvas, {
+      type: "line",
+      data: { labels: data.ticks, datasets: names.map((name) => {
+        const slot = slots[name] ?? 0;
+        return {
+          label: labels[name] ?? name, data: data.series[name] ?? [], borderColor: t.series[slot], backgroundColor: t.series[slot],
+          borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, pointStyle: POINT_STYLES[slot], spanGaps: false, tension: 0.2,
+        };
+      }) },
+      options: {
+        plugins: { legend: { position: "top", align: "start", labels: { usePointStyle: true, boxWidth: 8, boxHeight: 8 } },
+                   tooltip: { callbacks: { title: title(data), label: (c) => `${c.dataset.label}: ${c.raw === null ? "–" : c.raw + "%"}` } } },
+        scales: { x: xAxis(t), y: { min: 0, max: 100, ticks: { stepSize: 25, callback: (v) => `${v}%` } } },
+      },
+    });
+  }
+
+  function temperature(canvas, data, root) {
+    const t = theme(root); base(t);
+    draw(canvas, {
+      type: "line",
+      data: { labels: data.ticks, datasets: [{
+        label: "Śr. temperatura maks. (°C)", data: data.temp_max, borderColor: t.series2, backgroundColor: t.series2,
+        borderWidth: 2, pointRadius: 3, spanGaps: false, tension: 0.2,
+      }] },
+      options: { plugins: { legend: { display: false }, tooltip: { callbacks: { title: title(data), label: (c) => `${c.raw} °C` } } },
+                 scales: { x: xAxis(t), y: { title: { display: true, text: "°C" } } } },
+    });
+  }
+
+  function precipitation(canvas, data, root) {
+    const t = theme(root); base(t);
+    draw(canvas, {
+      type: "bar",
+      data: { labels: data.ticks, datasets: [bar("Opady (mm)", data.precip, t.series1, t)] },
+      options: { plugins: { legend: { display: false }, tooltip: { callbacks: { title: title(data), label: (c) => `${c.raw} mm` } } },
+                 scales: { x: xAxis(t), y: { beginAtZero: true, title: { display: true, text: "mm" } } } },
+    });
+  }
+
+  return { habit, habitLines, pomodoro, walks, bloodPressure, temperature, precipitation };
 })();

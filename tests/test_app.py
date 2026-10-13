@@ -104,7 +104,7 @@ def test_history_lists_days(client, session):
     session.commit()
     r = client.get("/history")
     assert r.status_code == 200
-    assert "(2 dni)" in r.text
+    assert "· 2 dni" in r.text
     assert r.text.index("23.09") < r.text.index("22.09")
 
 
@@ -139,5 +139,18 @@ def test_stats_widget_only_on_today(client, session):
     session.add(Day(date=dt.date(2026, 9, 23), source="manual", habits=[HabitEntry(habit="trening", value=1)]))
     session.commit()
     today_page = client.get("/day/2026-09-24").text  # today w fixture
-    assert 'id="widget-view"' in today_page and 'class="cal"' in today_page
-    assert 'id="widget-view"' not in client.get("/day/2026-09-23").text
+    assert 'class="slot-view"' in today_page and 'class="cal"' in today_page
+    assert today_page.index('id="widget"') < today_page.index('name="pomodoro_count"')  # statystyki nad formularzem
+    assert 'class="slot-view"' not in client.get("/day/2026-09-23").text
+
+
+def test_page_title_is_clean(client):
+    html = client.get("/day/2026-09-24").text
+    title = html[html.index("<title>") : html.index("</title>")]
+    assert "<script" not in title and title.endswith("— Dziennik")
+
+
+def test_screenshot_import_script_included_once(client):
+    html = client.get("/day/2026-09-24").text
+    assert html.count('addEventListener("paste"') == 1
+    assert html.index('addEventListener("paste"') > html.index('id="shot-form"')  # skrypt po formularzu

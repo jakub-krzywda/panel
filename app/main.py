@@ -4,11 +4,13 @@
     uv run uvicorn app.main:app --host 0.0.0.0      # w sieci domowej
 """
 
+import asyncio
 import datetime as dt
 from collections.abc import Iterator
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,13 +20,19 @@ from sqlalchemy.orm import Session
 from app import practice, stats, weather
 from app.db import SessionLocal
 from app.forms import CURRENT_HABITS, POMODORO_MAX, habit_label, habit_order, habits_for_form, parse_day_form, save_manual_day
-from app.models import Day, PracticeCategory, PracticeItem
+from app.models import Day, PracticeCategory, PracticeItem, Source
+from app.screenshot_import import ScreenshotError, decode_image, prefill
+from dziennik.screenshot import AlignmentError, parse_screenshot
 
 app = FastAPI(title="Dziennik")
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+# ?v=<mtime> — po zmianie pliku przeglądarka nie użyje starej wersji z cache.
+templates.env.globals["static"] = lambda name: f"/static/{name}?v={int((STATIC_DIR / name).stat().st_mtime)}"
 templates.env.globals["habit_label"] = habit_label
 templates.env.globals["weather_desc"] = weather.describe
+templates.env.globals["weather_icon"] = weather.icon
 # Liczba albo „–” (snapshot pogody może nie mieć któregoś pola).
 templates.env.filters["num"] = lambda v, digits=0: f"{v:.{digits}f}" if isinstance(v, int | float) else "–"
 
@@ -35,6 +43,7 @@ templates.env.filters["weekday_short"] = lambda d: WEEKDAYS_PL[d.weekday()][:3]
 templates.env.filters["local"] = lambda t: t.replace(tzinfo=dt.UTC).astimezone()
 
 RECENT_DAYS = 7
+FORECAST_TIMEOUT_S = 3.0  # strona nie czeka dłużej na prognozę, gdy nie ma sieci
 
 
 def get_session() -> Iterator[Session]:
@@ -56,10 +65,32 @@ def _stats_data(days: list[Day], period: str) -> dict:
     names = sorted(habits["series"], key=habit_order)
     habits["current"] = [h for h in names if h in CURRENT_HABITS]
     habits["legacy"] = [h for h in names if h not in CURRENT_HABITS]
-    return {"habits": habits, "activity": stats.activity(days, period), "bp": stats.blood_pressure(days)}
+    return {"habits": habits, "activity": stats.activity(days, period), "bp": stats.blood_pressure(days),
+            "weather": stats.weather(days, period)}
 
 
-def _render_day(request: Request, session: Session, date: dt.date, *, errors=(), form=None, saved=False, status=200):
+async def _forecast(date: dt.date) -> dict | None:
+    if date != today():
+        return None
+    try:
+        return await asyncio.wait_for(weather.forecast(date), FORECAST_TIMEOUT_S)
+    except TimeoutError:
+        return None
+
+
+def _render_day(
+    request: Request,
+    session: Session,
+    date: dt.date,
+    *,
+    errors=(),
+    form=None,
+    saved=False,
+    status=200,
+    forecast=None,
+    uncertain=frozenset(),
+    imported=None,
+):
     day = _day(session, date)
     recent = session.scalars(
         select(Day).where(Day.date <= date, Day.date > date - dt.timedelta(days=RECENT_DAYS)).order_by(Day.date.desc())
@@ -72,6 +103,9 @@ def _render_day(request: Request, session: Session, date: dt.date, *, errors=(),
             "calendar": stats.calendar(all_days, today()),
             "months": stats.MONTHS_PL,
             "periods": stats.PERIODS,
+            # kolor nawyku = jego pozycja na templacie (stały, niezależny od tego, które są wybrane)
+            "habit_slots": {name: i for i, name in enumerate(CURRENT_HABITS)},
+            "habit_labels": {name: habit_label(name) for name in CURRENT_HABITS},
         }
     return templates.TemplateResponse(
         request,
@@ -92,6 +126,9 @@ def _render_day(request: Request, session: Session, date: dt.date, *, errors=(),
             "form": form,  # po błędzie walidacji: to, co wpisał użytkownik
             "saved": saved,
             "timedelta": dt.timedelta,
+            "forecast": forecast,
+            "uncertain": uncertain,  # pola wypełnione ze zrzutu do sprawdzenia
+            "imported": imported,  # info o imporcie ze zrzutu (dopasowanie, brakujące pola)
         },
         status_code=status,
     )
@@ -103,8 +140,26 @@ def index():
 
 
 @app.get("/day/{date}", response_class=HTMLResponse)
-def day_form(request: Request, date: dt.date, saved: bool = False, session: Session = Depends(get_session)):
-    return _render_day(request, session, date, saved=saved)
+async def day_form(request: Request, date: dt.date, saved: bool = False, session: Session = Depends(get_session)):
+    return _render_day(request, session, date, saved=saved, forecast=await _forecast(date))
+
+
+@app.post("/day/{date}/screenshot", response_class=HTMLResponse)
+async def day_screenshot(
+    request: Request, date: dt.date, file: UploadFile = File(), session: Session = Depends(get_session)
+):
+    """Zrzut dolnej części strony v8 → formularz wypełniony do sprawdzenia. Nic nie jest zapisywane."""
+    forecast = await _forecast(date)
+    try:
+        image = decode_image(await file.read())
+        result = await run_in_threadpool(parse_screenshot, image)  # dopasowanie + OCR trwają 1–2 s
+    except (ScreenshotError, AlignmentError) as e:
+        return _render_day(request, session, date, errors=[str(e)], forecast=forecast, status=400)
+    day = _day(session, date)
+    items = {c.value: practice.items_for_form(session, day, c) for c in PracticeCategory}
+    form, uncertain = prefill(result, day, items)
+    imported = {"score": result["alignment"]["score"], "missing": [m for m in result["missing"] if not m.startswith(("date", "sleep"))]}
+    return _render_day(request, session, date, form=form, forecast=forecast, uncertain=uncertain, imported=imported)
 
 
 @app.post("/day/{date}", response_class=HTMLResponse)
@@ -112,13 +167,14 @@ async def day_save(request: Request, date: dt.date, session: Session = Depends(g
     form = await request.form()
     columns, habits, errors = parse_day_form(form, habits_for_form(_day(session, date)))
     if errors:
-        return _render_day(request, session, date, errors=errors, form=form, status=400)
+        return _render_day(request, session, date, errors=errors, form=form, forecast=await _forecast(date), status=400)
     # Pogoda: dziś zawsze świeża (warunki w chwili zapisu), dla innych dni tylko gdy jej brak.
     existing = _day(session, date)
     snapshot = None
     if date == today() or existing is None or existing.weather_api is None:
         snapshot = await weather.snapshot(date, today())
-    save_manual_day(session, date, columns, habits, practice.parse_practice_form(form), snapshot)
+    source = Source.SCREENSHOT_IMPORT if form.get("_source") == Source.SCREENSHOT_IMPORT else Source.MANUAL
+    save_manual_day(session, date, columns, habits, practice.parse_practice_form(form), snapshot, source)
     return RedirectResponse(f"/day/{date.isoformat()}?saved=1", status_code=303)
 
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set section = "day" if date == today else "" %}
 {% block title %}{{ date.strftime("%d.%m.%Y") }} — Dziennik{% endblock %}
 
 {# Wartość pola: po błędzie walidacji to, co wpisał użytkownik; inaczej to, co w bazie. #}
@@ -11,107 +12,212 @@
 {% macro checked(name, db_value) -%}
   {%- if form is not none -%}{{ "checked" if name in form }}{%- else -%}{{ "checked" if db_value }}{%- endif -%}
 {%- endmacro %}
+{% macro unc(name) -%}{{ " uncertain" if name in uncertain }}{%- endmacro %}
 
-{% block head %}{% if widget %}<link rel="stylesheet" href="/static/stats.css">{% endif %}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ static('stats.css') }}">
+{% endblock %}
 
 {% block content %}
-<div class="pager">
-  <a href="/day/{{ (date - timedelta(days=1)).isoformat() }}">← poprzedni</a>
-  {% if date < today %}<a href="/day/{{ (date + timedelta(days=1)).isoformat() }}">następny →</a>{% endif %}
+<div class="page-head">
+  <div>
+    <h1>{{ date | weekday | capitalize }}, {{ date.strftime("%d.%m.%Y") }}</h1>
+    <div class="meta" style="margin-top:6px">
+      {% if date == today %}<span class="badge accent">dziś</span>{% endif %}
+      {% if day is not none %}
+        <span class="badge">{{ day.source }}{% if day.template_version %} · {{ day.template_version }}{% endif %}</span>
+        {% if day.fill_timestamp %}<span class="badge">wypełniono {{ (day.fill_timestamp | local).strftime("%d.%m %H:%M") }}</span>{% endif %}
+      {% else %}
+        <span class="badge">brak wpisu</span>
+      {% endif %}
+    </div>
+  </div>
+  <div class="day-nav">
+    <form method="post" action="/day/{{ date.isoformat() }}/screenshot" enctype="multipart/form-data" id="shot-form">
+      <label class="btn sm" title="Zrzut dolnej części strony (pod „DANE PARSOWALNE”). Możesz też wkleić ⌘V.">
+        Import ze zrzutu
+        <input type="file" name="file" accept="image/png,image/jpeg" hidden>
+      </label>
+    </form>
+    <a class="btn ghost sm" href="/day/{{ (date - timedelta(days=1)).isoformat() }}">← poprzedni</a>
+    {% if date < today %}<a class="btn ghost sm" href="/day/{{ (date + timedelta(days=1)).isoformat() }}">następny →</a>{% endif %}
+    {% if date != today %}<a class="btn ghost sm" href="/">dziś</a>{% endif %}
+  </div>
 </div>
 
-<h1>{{ date | weekday | capitalize }}, {{ date.strftime("%d.%m.%Y") }}{% if date == today %} <span class="muted">(dziś)</span>{% endif %}</h1>
-
-{% if saved %}<p class="ok">Zapisano.</p>{% endif %}
-{% if errors %}
-  <ul class="errors">{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>
-{% endif %}
-{% if day is not none %}
-  <p class="muted">
-    Źródło: {{ day.source }}{% if day.template_version %} (template {{ day.template_version }}){% endif %}
-    {% if day.fill_timestamp %} · wypełniono {{ (day.fill_timestamp | local).strftime("%d.%m %H:%M") }}{% endif %}
-    {% if day.source == "pdf_import" %} · zapis zmieni źródło na „manual”{% endif %}
-  </p>
-{% endif %}
-{% if day is not none and day.weather_api %}
-  {% set w = day.weather_api.daily %}{% set c = day.weather_api.current %}
-  <p class="weather">
-    <strong>Pogoda:</strong> {{ weather_desc(w.weather_code) }}, {{ w.temperature_2m_min | num }}–{{ w.temperature_2m_max | num }} °C,
-    opady {{ w.precipitation_sum | num(1) }} mm, słońce {{ (w.sunshine_duration / 3600) | num(1) if w.sunshine_duration is number else "–" }} h,
-    ciśnienie {{ w.pressure_msl_mean | num }} hPa
-    {% if c %}<br><span class="muted">przy zapisie: {{ c.temperature_2m | num(1) }} °C (odczuwalna {{ c.apparent_temperature | num(1) }}), {{ weather_desc(c.weather_code) }}</span>{% endif %}
-    <span class="muted"> · Open-Meteo, {{ day.weather_api.location }}</span>
-  </p>
-{% endif %}
-
-<form method="post">
-  <fieldset>
-    <legend>Sen</legend>
-    <label>Zasnąłem <input type="time" name="sleep_from" value="{{ val('sleep_from') }}"></label>
-    <label>Wstałem <input type="time" name="sleep_to" value="{{ val('sleep_to') }}"></label>
-    <label>Godzin <input type="text" inputmode="decimal" name="sleep_hours" size="4" value="{{ val('sleep_hours') }}" placeholder="auto"></label>
-  </fieldset>
-
-  <fieldset>
-    <legend>Nawyki</legend>
-    {% for name in habit_names %}
-      <label>
-        <input type="checkbox" name="habit.{{ name }}" {{ checked("habit." ~ name, habits.get(name)) }}>
-        {{ habit_label(name) }}{% if habits.get(name) == 0.5 and form is none %} <span class="muted">(½)</span>{% endif %}
-      </label>
-    {% endfor %}
-  </fieldset>
-
-  <fieldset>
-    <legend>Pomodoro</legend>
-    <label><input type="number" name="pomodoro_count" min="0" max="{{ pomodoro_max }}" value="{{ val('pomodoro_count') }}"> / {{ pomodoro_max }}</label>
-  </fieldset>
-
-  <fieldset>
-    <legend>Spacery z psami</legend>
-    <div><label><input type="checkbox" name="walk_1300" {{ checked("walk_1300", day.walk_1300 if day) }}> 13:00</label>
-      <input type="text" name="walk_1300_note" value="{{ val('walk_1300_note') }}" placeholder="las, blok…"></div>
-    <div><label><input type="checkbox" name="walk_2000" {{ checked("walk_2000", day.walk_2000 if day) }}> 20:00</label>
-      <input type="text" name="walk_2000_note" value="{{ val('walk_2000_note') }}" placeholder="las, blok…"></div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Ciśnienie</legend>
-    <div class="grid">
-      <span></span><span class="muted">SYS</span><span class="muted">DIA</span><span class="muted">PULS</span>
-      {% for row, label in [("morning", "rano"), ("evening", "wieczorem")] %}
-        <span>{{ label }}</span>
-        {% for col in ["sys", "dia", "pulse"] %}
-          <input type="number" name="bp_{{ row }}_{{ col }}" value="{{ val('bp_' ~ row ~ '_' ~ col) }}">
-        {% endfor %}
-      {% endfor %}
+{% if date == today %}
+<section class="card forecast" aria-label="Prognoza na dziś">
+  {% if forecast %}
+    {% set f = forecast.daily %}
+    <div class="forecast-now">
+      <span class="forecast-icon" aria-hidden="true">{{ weather_icon(f.weather_code) }}</span>
+      <div>
+        <div class="temp">{{ f.temperature_2m_min | num }}–{{ f.temperature_2m_max | num }} °C</div>
+        <div class="muted small">{{ weather_desc(f.weather_code) }} · {{ forecast.location }}</div>
+      </div>
     </div>
-  </fieldset>
-
-  {% for cat, items in practice.items() %}
-  {% set note = "sport_text" if cat == "sport" else "music_text" %}
-  <fieldset>
-    <legend>Co ćwiczę — {{ category_labels[cat] }}</legend>
-    {% for item in items %}
-      <label>
-        <input type="checkbox" name="practice.{{ item.id }}" {{ checked("practice." ~ item.id, item.id in practice_done) }}>
-        {{ item.label }}{% if not item.active %} <span class="muted">(ukryta)</span>{% endif %}
-      </label>
-    {% else %}
-      <p class="muted">Brak pozycji — dopisz niżej albo w <a href="/config">ustawieniach</a>.</p>
-    {% endfor %}
-    <input class="wide" type="text" name="practice_new.{{ cat }}" maxlength="200"
-           value="{{ form.get('practice_new.' ~ cat, '') if form is not none }}"
-           placeholder="+ nowa pozycja (zostanie na liście na kolejne dni)">
-    <label class="block">Notatka <textarea name="{{ note }}">{{ val(note) }}</textarea></label>
-  </fieldset>
-  {% endfor %}
-
-  <button type="submit">Zapisz</button>
-</form>
+    <div class="forecast-facts small">
+      <span><strong>{{ f.precipitation_probability_max | num }}%</strong> szansa opadów</span>
+      <span><strong>{{ f.precipitation_sum | num(1) }} mm</strong> opady</span>
+      <span>wschód <strong>{{ f.sunrise or "–" }}</strong></span>
+      <span>zachód <strong>{{ f.sunset or "–" }}</strong></span>
+    </div>
+    <ol class="forecast-hours">
+      {% for h in forecast.hours %}
+        <li>
+          <span class="muted small">{{ h.hour }}</span>
+          <span aria-hidden="true">{{ weather_icon(h.weather_code) }}</span>
+          <strong>{{ h.temperature_2m | num }}°</strong>
+          <span class="muted small">{{ h.precipitation_probability | num }}%</span>
+        </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <span class="muted">Prognoza niedostępna (brak połączenia z Open-Meteo).</span>
+  {% endif %}
+</section>
+{% endif %}
 
 {% if widget %}{% include "_stats_widget.html" %}{% endif %}
 
-<h2>Ostatnie dni</h2>
-{% with days = recent %}{% include "_days_table.html" %}{% endwith %}
+<div class="layout-main">
+  <div>
+    {% if saved %}<div class="flash ok">Zapisano.</div>{% endif %}
+    {% if imported %}
+      <div class="flash warn">
+        Wczytano ze zrzutu — <strong>sprawdź i kliknij „Zapisz”</strong>. Nic nie zostało jeszcze zapisane.
+        {% if uncertain %}Pola do sprawdzenia są obrysowane.{% endif %}
+        {% if imported.missing %}<br><span class="small">Poza kadrem (bez zmian): {{ imported.missing | join(", ") }}</span>{% endif %}
+      </div>
+    {% endif %}
+    {% if errors %}
+      <div class="flash err">Popraw błędy:<ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+    {% endif %}
+
+    <form method="post" action="/day/{{ date.isoformat() }}">
+      {% if form is not none and form.get("_source") %}<input type="hidden" name="_source" value="{{ form.get('_source') }}">{% endif %}
+      <div class="form-grid">
+        {% if day is not none and day.weather_api %}
+          {% set w = day.weather_api.daily %}{% set c = day.weather_api.current %}
+          <section class="card span-all">
+            <div class="weather">
+              <strong>Pogoda</strong>
+              <span class="temp">{{ w.temperature_2m_min | num }}–{{ w.temperature_2m_max | num }} °C</span>
+              <span>{{ weather_desc(w.weather_code) }}</span>
+              <span class="muted">opady {{ w.precipitation_sum | num(1) }} mm</span>
+              <span class="muted">słońce {{ (w.sunshine_duration / 3600) | num(1) if w.sunshine_duration is number else "–" }} h</span>
+              <span class="muted">ciśnienie {{ w.pressure_msl_mean | num }} hPa</span>
+              {% if c %}<span class="muted">przy zapisie: {{ c.temperature_2m | num(1) }} °C (odczuwalna {{ c.apparent_temperature | num(1) }})</span>{% endif %}
+              <span class="muted small">Open-Meteo, {{ day.weather_api.location }}</span>
+            </div>
+          </section>
+        {% endif %}
+
+        <section class="card span-all">
+          <h2>Nawyki</h2>
+          <div class="pills">
+            {% for name in habit_names %}
+              <label class="pill{{ unc('habit.' ~ name) }}">
+                <input type="checkbox" name="habit.{{ name }}" {{ checked("habit." ~ name, habits.get(name)) }}>
+                {{ habit_label(name) }}{% if habits.get(name) == 0.5 and form is none %} <span class="sub">(½)</span>{% endif %}
+              </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Pomodoro</h2>
+          {% set pomo = (val('pomodoro_count') or 0) | int %}
+          <div class="pills{{ unc('pomodoro_count') }}" role="radiogroup" aria-label="Liczba pomodoro">
+            {% for n in range(pomodoro_max + 1) %}
+              <label class="pill num"><input type="radio" name="pomodoro_count" value="{{ n }}" {{ "checked" if n == pomo }}>{{ n }}</label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Spacery z psami</h2>
+          <div class="walk">
+            <label class="pill"><input type="checkbox" name="walk_1300" {{ checked("walk_1300", day.walk_1300 if day) }}>13:00</label>
+            <input type="text" class="{{ unc('walk_1300_note') }}" name="walk_1300_note" value="{{ val('walk_1300_note') }}" placeholder="las, blok…" aria-label="Notatka 13:00">
+          </div>
+          <div class="walk">
+            <label class="pill"><input type="checkbox" name="walk_2000" {{ checked("walk_2000", day.walk_2000 if day) }}>20:00</label>
+            <input type="text" class="{{ unc('walk_2000_note') }}" name="walk_2000_note" value="{{ val('walk_2000_note') }}" placeholder="las, blok…" aria-label="Notatka 20:00">
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Sen</h2>
+          <div class="row">
+            <label class="field"><span>Zasnąłem</span><input type="time" name="sleep_from" value="{{ val('sleep_from') }}"></label>
+            <label class="field"><span>Wstałem</span><input type="time" name="sleep_to" value="{{ val('sleep_to') }}"></label>
+            <label class="field"><span>Godzin</span><input type="text" inputmode="decimal" name="sleep_hours" size="4" value="{{ val('sleep_hours') }}" placeholder="auto"></label>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Ciśnienie</h2>
+          <div class="bp-grid">
+            <span></span><span class="h">SYS</span><span class="h">DIA</span><span class="h">PULS</span>
+            {% for row, label in [("morning", "rano"), ("evening", "wieczorem")] %}
+              <span>{{ label }}</span>
+              {% for col in ["sys", "dia", "pulse"] %}
+                <input type="number" class="{{ unc('bp_' ~ row ~ '_' ~ col) }}" name="bp_{{ row }}_{{ col }}" value="{{ val('bp_' ~ row ~ '_' ~ col) }}" aria-label="{{ col | upper }} {{ label }}">
+              {% endfor %}
+            {% endfor %}
+          </div>
+        </section>
+
+        {% for cat, items in practice.items() %}
+        {% set note = "sport_text" if cat == "sport" else "music_text" %}
+        <section class="card">
+          <h2>Co ćwiczę — {{ category_labels[cat] }} <a class="small" href="/config">lista</a></h2>
+          <div class="pills">
+            {% for item in items %}
+              <label class="pill{{ unc('practice.' ~ item.id) }}">
+                <input type="checkbox" name="practice.{{ item.id }}" {{ checked("practice." ~ item.id, item.id in practice_done) }}>
+                {{ item.label }}{% if not item.active %} <span class="sub">(ukryta)</span>{% endif %}
+              </label>
+            {% else %}
+              <span class="muted small">Brak pozycji — dopisz poniżej.</span>
+            {% endfor %}
+          </div>
+          <input class="wide" style="margin-top:10px" type="text" name="practice_new.{{ cat }}" maxlength="200"
+                 value="{{ form.get('practice_new.' ~ cat, '') if form is not none }}"
+                 placeholder="+ nowa pozycja (zostanie na liście)" aria-label="Nowa pozycja — {{ category_labels[cat] }}">
+          <label class="field" style="margin-top:10px"><span>Notatka</span><textarea class="{{ unc(note) }}" name="{{ note }}">{{ val(note) }}</textarea></label>
+        </section>
+        {% endfor %}
+      </div>
+
+      <div class="save-bar">
+        {% if day is not none and day.source == "pdf_import" %}<span class="muted small">zapis zmieni źródło na „manual”</span>{% endif %}
+        <button class="btn" type="submit">Zapisz</button>
+      </div>
+    </form>
+  </div>
+
+  <aside class="card">
+    <h2>Ostatnie dni <a class="small" href="/history">historia →</a></h2>
+    {% with days = recent, compact = true, current = date %}{% include "_days_table.html" %}{% endwith %}
+  </aside>
+</div>
+<script>
+// Import ze zrzutu: wybór pliku albo wklejenie obrazu ze schowka (⌘V / Ctrl+V) od razu wysyła formularz.
+(() => {
+  const form = document.getElementById("shot-form");
+  const input = form.querySelector("input[type=file]");
+  input.addEventListener("change", () => input.files.length && form.submit());
+  document.addEventListener("paste", (e) => {
+    if (e.target instanceof Element && e.target.closest("input, textarea")) return;  // zwykłe wklejanie tekstu do pól
+    const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith("image/"));
+    if (!file) return;
+    e.preventDefault();
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    form.submit();
+  });
+})();
+</script>
 {% endblock %}

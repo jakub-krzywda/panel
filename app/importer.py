@@ -2,8 +2,8 @@
 
     uv run python -m app.importer data/parsed/pages.jsonl
 
-Upsert po dacie, idempotentny: dzień z importu jest nadpisywany w całości (razem z nawykami),
-dzień wpisany ręcznie (source=manual) nigdy nie jest ruszany.
+Upsert po dacie, idempotentny: dzień z importu PDF jest nadpisywany w całości (razem z nawykami),
+dzień zapisany z formularza (manual, screenshot_import) nigdy nie jest ruszany.
 """
 
 import argparse
@@ -85,8 +85,8 @@ def import_results(session: Session, results: Iterable[dict]) -> Counter:
         seen.add(date)
 
         day = session.scalar(select(Day).where(Day.date == date))
-        if day is not None and day.source == Source.MANUAL:
-            stats["skipped_manual"] += 1
+        if day is not None and day.source != Source.PDF_IMPORT:
+            stats["skipped_protected"] += 1
             continue
         if day is None:
             day = Day(date=date)

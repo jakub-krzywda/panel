@@ -62,3 +62,14 @@ def test_calendar_grid():
 def test_empty():
     assert stats.calendar([], dt.date(2026, 10, 13)) == []
     assert stats.habit_rates([], "week") == {"labels": [], "ticks": [], "series": {}}
+
+
+def test_weather_by_week():
+    def w(t, p):
+        return {"daily": {"temperature_2m_max": t, "precipitation_sum": p}}
+
+    days = [day("2026-10-05", weather_api=w(10.0, 1.0)), day("2026-10-06", weather_api=w(14.0, 0.5)),
+            day("2026-10-12", weather_api=None), day("2026-10-13", weather_api=w(None, None))]
+    r = stats.weather(days, "week")
+    assert r["temp_max"] == [12.0, None]
+    assert r["precip"] == [1.5, None]

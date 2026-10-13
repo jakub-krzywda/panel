@@ -1,6 +1,11 @@
 {% extends "base.html" %}
+{% set section = "history" %}
 {% block title %}Historia — Dziennik{% endblock %}
 {% block content %}
-<h1>Historia <span class="muted">({{ days | length }} dni)</span></h1>
-{% include "_days_table.html" %}
+<div class="page-head">
+  <h1>Historia <span class="muted">· {{ days | length }} dni</span></h1>
+</div>
+<section class="card">
+  {% include "_days_table.html" %}
+</section>
 {% endblock %}

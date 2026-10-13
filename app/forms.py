@@ -125,12 +125,14 @@ def save_manual_day(
     habits: dict[str, float],
     practice: tuple[set[int], dict[str, str]] = (set(), {}),
     weather: dict | None = None,
+    source: Source = Source.MANUAL,
 ) -> Day:
     """Zapis z formularza. Dzień staje się `manual` — kolejne importy go nie nadpiszą.
 
     Nawyk „1/2” z importu zostaje 0.5, jeśli checkbox nadal jest zaznaczony.
     `practice` = (id odhaczonych pozycji „co ćwiczę”, {kategoria: nowa pozycja}).
     `weather` = snapshot z Open-Meteo; None zostawia dotychczasową pogodę bez zmian.
+    `source` = screenshot_import, gdy formularz był wypełniony ze zrzutu i zatwierdzony przez użytkownika.
     """
     day = session.scalar(select(Day).where(Day.date == date))
     if day is None:
@@ -138,7 +140,7 @@ def save_manual_day(
         session.add(day)
     previous = {h.habit: h.value for h in day.habits}
 
-    day.source = Source.MANUAL
+    day.source = source
     day.fill_timestamp = utcnow()
     for col, value in columns.items():
         setattr(day, col, value)

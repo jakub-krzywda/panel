@@ -134,3 +134,23 @@ def blood_pressure(days: Sequence[Day]) -> dict:
         "evening_sys": [d.bp_evening_sys for d in measured],
         "evening_dia": [d.bp_evening_dia for d in measured],
     }
+
+
+def weather(days: Sequence[Day], period: str) -> dict:
+    """Średnia temperatura maksymalna i suma opadów w okresie (z zapisanych snapshotów Open-Meteo)."""
+    periods = _periods(days, period)
+    index = {p: i for i, p in enumerate(periods)}
+    temps: list[list[float]] = [[] for _ in periods]
+    precip: list[float | None] = [None] * len(periods)
+    for day in days:
+        daily = (day.weather_api or {}).get("daily") or {}
+        i = index[period_start(day.date, period)]
+        if isinstance(t := daily.get("temperature_2m_max"), int | float):
+            temps[i].append(t)
+        if isinstance(p := daily.get("precipitation_sum"), int | float):
+            precip[i] = round((precip[i] or 0) + p, 1)
+    return {
+        **_axis(periods, period),
+        "temp_max": [round(sum(t) / len(t), 1) if t else None for t in temps],
+        "precip": precip,
+    }

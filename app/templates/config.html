@@ -1,29 +1,35 @@
 {% extends "base.html" %}
+{% set section = "config" %}
 {% block title %}Ustawienia — Dziennik{% endblock %}
 {% block content %}
-<h1>Ustawienia</h1>
-<p class="muted">Pozycje „co ćwiczę” pokazują się w formularzu dnia jako checkboxy. Ukrycie nie kasuje historii.</p>
+<div class="page-head">
+  <div>
+    <h1>Ustawienia</h1>
+    <p class="muted" style="margin:6px 0 0">Pozycje „co ćwiczę” pokazują się w formularzu dnia. Ukrycie nie kasuje historii.</p>
+  </div>
+</div>
 
+<div class="cols-2">
 {% for cat, cat_items in items.items() %}
-<fieldset>
-  <legend>Co ćwiczę — {{ category_labels[cat] }}</legend>
+<section class="card">
+  <h2>Co ćwiczę — {{ category_labels[cat] }} <span class="badge">{{ cat_items | selectattr("active") | list | length }} aktywnych</span></h2>
   <table>
     {% for item in cat_items %}
     <tr{% if not item.active %} class="muted"{% endif %}>
-      <td style="width:100%">
-        <form method="post" action="/config/items/{{ item.id }}" class="inline">
+      <td style="width:100%; white-space:normal">
+        <form method="post" action="/config/items/{{ item.id }}">
           <input type="hidden" name="action" value="rename">
-          <input type="text" name="label" value="{{ item.label }}" maxlength="200" class="wide" aria-label="Nazwa">
+          <input type="text" name="label" value="{{ item.label }}" maxlength="200" class="wide" aria-label="Nazwa pozycji">
         </form>
       </td>
       <td>
-        <form method="post" action="/config/items/{{ item.id }}" class="inline">
-          <button class="small" name="action" value="up" title="W górę" {{ "disabled" if loop.first }}>↑</button>
-          <button class="small" name="action" value="down" title="W dół" {{ "disabled" if loop.last }}>↓</button>
+        <form method="post" action="/config/items/{{ item.id }}" class="row" style="flex-wrap:nowrap; gap:4px">
+          <button class="btn ghost sm" name="action" value="up" title="W górę" aria-label="W górę" {{ "disabled" if loop.first }}>↑</button>
+          <button class="btn ghost sm" name="action" value="down" title="W dół" aria-label="W dół" {{ "disabled" if loop.last }}>↓</button>
           {% if item.active %}
-            <button class="small secondary" name="action" value="hide">Ukryj</button>
+            <button class="btn ghost sm" name="action" value="hide">Ukryj</button>
           {% else %}
-            <button class="small" name="action" value="show">Przywróć</button>
+            <button class="btn sm" name="action" value="show">Przywróć</button>
           {% endif %}
         </form>
       </td>
@@ -32,12 +38,13 @@
     <tr><td class="muted">Brak pozycji.</td></tr>
     {% endfor %}
   </table>
-  <form method="post" action="/config/items">
+  <form method="post" action="/config/items" class="row" style="margin-top:12px; flex-wrap:nowrap">
     <input type="hidden" name="category" value="{{ cat }}">
-    <input type="text" name="label" maxlength="200" class="wide" placeholder="Nowa pozycja, np. Gamy C-dur" required>
-    <button class="small" type="submit">Dodaj</button>
+    <input type="text" name="label" maxlength="200" class="wide" placeholder="Nowa pozycja, np. Gamy C-dur" required aria-label="Nowa pozycja">
+    <button class="btn" type="submit">Dodaj</button>
   </form>
-  <p class="muted">Zmiana nazwy: edytuj pole i naciśnij Enter.</p>
-</fieldset>
+  <p class="muted small" style="margin:8px 0 0">Zmiana nazwy: edytuj pole i naciśnij Enter.</p>
+</section>
 {% endfor %}
+</div>
 {% endblock %}

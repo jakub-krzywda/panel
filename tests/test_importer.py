@@ -80,12 +80,13 @@ def test_reimport_replaces_values(engine):
         assert habits_of(s, day.date) == {"trening": 1.0}
 
 
-def test_manual_day_is_not_overwritten(engine):
+@pytest.mark.parametrize("source", ["manual", "screenshot_import"])
+def test_form_saved_day_is_not_overwritten(engine, source):
     with Session(engine) as s:
-        s.add(Day(date=dt.date(2026, 9, 23), source="manual", pomodoro_count=7))
+        s.add(Day(date=dt.date(2026, 9, 23), source=source, pomodoro_count=7))
         s.commit()
         stats = import_results(s, [page()])
-        assert stats == {"skipped_manual": 1}
+        assert stats == {"skipped_protected": 1}
         assert s.scalar(select(Day)).pomodoro_count == 7
 
 

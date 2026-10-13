@@ -1,72 +1,109 @@
-{# Jedna statystyka naraz na stronie głównej. Wymaga: widget ({week: data, month: data}), calendar, months, periods. #}
-<section class="viz" id="widget">
-  <h2>Statystyki</h2>
-  <div class="tabs">
-    <select id="widget-view" aria-label="Wybierz statystykę">
-      <option value="calendar">Kalendarz dni</option>
-      <option value="habits">Nawyki — % wykonania</option>
-      <option value="pomodoro">Pomodoro</option>
-      <option value="walks">Spacery z psami</option>
-      <option value="bp">Ciśnienie krwi</option>
-    </select>
-    {% for key, label in periods.items() %}
-      <button type="button" data-period="{{ key }}">{{ label }}</button>
-    {% endfor %}
-    <a href="/stats" class="muted" style="border:0">wszystkie →</a>
-  </div>
+{# Strona główna: dwie statystyki obok siebie do porównań (wspólny okres → zgodne osie czasu).
+   Wymaga: widget ({week: data, month: data}), calendar, months, periods, habit_slots. #}
+{% set views = [
+  ("habits", "Nawyki — % wykonania"),
+  ("calendar", "Kalendarz dni"),
+  ("pomodoro", "Pomodoro"),
+  ("walks", "Spacery z psami"),
+  ("bp", "Ciśnienie krwi"),
+  ("temp", "Pogoda — temperatura"),
+  ("precip", "Pogoda — opady"),
+] %}
+<section class="card viz" id="widget">
+  <h2>
+    <span>Statystyki</span>
+    <span class="row">
+      <span class="segmented" role="radiogroup" aria-label="Okres">
+        {% for key, label in periods.items() %}
+          <label><input type="radio" name="widget-period" value="{{ key }}">{{ label }}</label>
+        {% endfor %}
+      </span>
+      <a href="/stats" class="small">wszystkie →</a>
+    </span>
+  </h2>
 
-  <div data-view="calendar">{% include "_calendar.html" %}</div>
-  <div data-view="habits" hidden>
-    <div class="multiples">
-      {% for habit in widget.week.habits.current %}
-      <div class="card">
-        <h3>{{ habit_label(habit) }}</h3>
-        <div class="chart-sm"><canvas data-habit="{{ habit }}" role="img" aria-label="{{ habit_label(habit) }} — % wykonania"></canvas></div>
+  <div class="cols-2">
+    {% for slot in range(2) %}
+    <div class="slot" data-slot="{{ slot }}">
+      <select class="slot-view" aria-label="Statystyka {{ slot + 1 }}">
+        {% for key, label in views %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select>
+      <div class="pills habit-picker" hidden>
+        {% for habit in widget.week.habits.current %}
+          <label class="pill">
+            <input type="checkbox" value="{{ habit }}">
+            <span class="swatch" style="--c: var(--series-{{ habit_slots[habit] + 1 }})"></span>{{ habit_label(habit) }}
+          </label>
+        {% endfor %}
       </div>
-      {% endfor %}
+      <div class="chart" data-chart><canvas role="img" aria-label="Wykres statystyki {{ slot + 1 }}"></canvas></div>
+      <div class="calendar-box" data-calendar hidden>{% include "_calendar.html" %}</div>
     </div>
+    {% endfor %}
   </div>
-  <div data-view="pomodoro" hidden><div class="chart-md"><canvas id="w-pomodoro" role="img" aria-label="Suma pomodoro"></canvas></div></div>
-  <div data-view="walks" hidden><div class="chart-md"><canvas id="w-walks" role="img" aria-label="Spacery z psami"></canvas></div></div>
-  <div data-view="bp" hidden><div class="chart-md"><canvas id="w-bp" role="img" aria-label="Ciśnienie krwi"></canvas></div></div>
 </section>
 
-<script src="/static/chart-4.4.7.umd.min.js"></script>
-<script src="/static/charts.js"></script>
+<script src="{{ static('chart-4.4.7.umd.min.js') }}"></script>
+<script src="{{ static('charts.js') }}"></script>
 <script>
 (() => {
   const data = {{ widget | tojson }};
+  const slotsMap = {{ habit_slots | tojson }};
+  const labels = {{ habit_labels | tojson }};
   const root = document.getElementById("widget");
-  const select = document.getElementById("widget-view");
-  const periodButtons = root.querySelectorAll("button[data-period]");
-  const KEY = "dziennik.widget";
+  const KEY = "dziennik.widget.v2";
+  const allHabits = data.week.habits.current;
 
-  // Wybór pamiętany per przeglądarka; localStorage bywa niedostępny (tryb prywatny) — wtedy domyślne.
-  let state = { view: "calendar", period: "week" };
-  try { state = { ...state, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch {}
+  // Stan pamiętany per przeglądarka; localStorage bywa niedostępny (tryb prywatny) — wtedy domyślny.
+  let state = { period: "week", slots: [{ view: "habits", habits: allHabits }, { view: "walks", habits: allHabits }] };
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (saved && Array.isArray(saved.slots) && saved.slots.length === 2) state = saved;
+  } catch {}
+
+  const PERIODLESS = new Set(["calendar", "bp"]);
+
+  function renderSlot(el, s) {
+    const view = s.view;
+    el.querySelector(".slot-view").value = view;
+    const picker = el.querySelector(".habit-picker");
+    picker.hidden = view !== "habits";
+    picker.querySelectorAll("input").forEach((i) => { i.checked = s.habits.includes(i.value); });
+    el.querySelector("[data-calendar]").hidden = view !== "calendar";
+    el.querySelector("[data-chart]").hidden = view === "calendar";
+
+    const canvas = el.querySelector("canvas");
+    const d = data[state.period];
+    switch (view) {
+      case "habits": {
+        const chosen = allHabits.filter((h) => s.habits.includes(h));
+        DziennikCharts.habitLines(canvas, d.habits, chosen, slotsMap, labels, root);
+        break;
+      }
+      case "pomodoro": DziennikCharts.pomodoro(canvas, d.activity, root); break;
+      case "walks": DziennikCharts.walks(canvas, d.activity, root); break;
+      case "bp": DziennikCharts.bloodPressure(canvas, d.bp, root); break;
+      case "temp": DziennikCharts.temperature(canvas, d.weather, root); break;
+      case "precip": DziennikCharts.precipitation(canvas, d.weather, root); break;
+    }
+  }
 
   function render() {
-    root.querySelectorAll("[data-view]").forEach((el) => { el.hidden = el.dataset.view !== state.view; });
-    periodButtons.forEach((b) => {
-      b.classList.toggle("active", b.dataset.period === state.period);
-      b.hidden = state.view === "calendar" || state.view === "bp";
-    });
-    select.value = state.view;
-    const d = data[state.period];
-    if (state.view === "habits") {
-      root.querySelectorAll("canvas[data-habit]").forEach((c) => DziennikCharts.habit(c, d.habits, c.dataset.habit, root));
-    } else if (state.view === "pomodoro") {
-      DziennikCharts.pomodoro(document.getElementById("w-pomodoro"), d.activity, root);
-    } else if (state.view === "walks") {
-      DziennikCharts.walks(document.getElementById("w-walks"), d.activity, root);
-    } else if (state.view === "bp") {
-      DziennikCharts.bloodPressure(document.getElementById("w-bp"), d.bp, root);
-    }
+    root.querySelectorAll("input[name=widget-period]").forEach((i) => { i.checked = i.value === state.period; });
+    root.querySelectorAll(".slot").forEach((el) => renderSlot(el, state.slots[+el.dataset.slot]));
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
   }
 
-  select.addEventListener("change", () => { state.view = select.value; render(); });
-  periodButtons.forEach((b) => b.addEventListener("click", () => { state.period = b.dataset.period; render(); }));
+  root.querySelectorAll("input[name=widget-period]").forEach((i) =>
+    i.addEventListener("change", () => { state.period = i.value; render(); }));
+  root.querySelectorAll(".slot").forEach((el) => {
+    const s = () => state.slots[+el.dataset.slot];
+    el.querySelector(".slot-view").addEventListener("change", (e) => { s().view = e.target.value; render(); });
+    el.querySelectorAll(".habit-picker input").forEach((i) => i.addEventListener("change", () => {
+      s().habits = [...el.querySelectorAll(".habit-picker input:checked")].map((x) => x.value);
+      render();
+    }));
+  });
   render();
 })();
 </script>

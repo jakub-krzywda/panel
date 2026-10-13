@@ -121,7 +121,7 @@ def test_form_save_stores_weather_and_shows_it(api, client, engine):
         assert day.weather_api["current"]["temperature_2m"] == 9.1
         assert day.weather_fetched_at is not None
     page = client.get(f"/day/{TODAY}").text
-    assert "Pogoda:" in page and "pochmurno" in page and "1019 hPa" in page
+    assert "Pogoda" in page and "pochmurno" in page and "1019 hPa" in page
 
 
 def test_form_save_without_network_still_saves(client, engine):
@@ -138,3 +138,28 @@ def test_past_day_with_weather_is_not_refetched(api, client, engine):
         s.commit()
     client.post("/day/2026-10-01", data={})
     assert api == []
+
+
+def test_today_page_shows_forecast(client, monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        hours = [f"2026-10-13T{h:02d}:00" for h in range(24)]
+        return httpx.Response(200, json={
+            "daily": {"weather_code": [61], "temperature_2m_max": [12.4], "temperature_2m_min": [6.8],
+                      "precipitation_sum": [2.1], "precipitation_probability_max": [70],
+                      "sunrise": ["2026-10-13T07:02"], "sunset": ["2026-10-13T18:11"]},
+            "hourly": {"time": hours, "temperature_2m": [float(h) for h in range(24)],
+                       "precipitation_probability": [10] * 24, "weather_code": [3] * 24},
+        })
+
+    monkeypatch.setattr(weather, "TRANSPORT", httpx.MockTransport(handler))
+    html = client.get(f"/day/{TODAY}").text
+    assert "7–12 °C" in html and "lekki deszcz" in html and "70%" in html and "07:02" in html
+    assert html.count("<li>") >= 6 and "21:00" in html and "03:00" not in html
+
+
+def test_forecast_unavailable_offline(client):
+    assert "Prognoza niedostępna" in client.get(f"/day/{TODAY}").text
+
+
+def test_no_forecast_on_past_day(api, client):
+    assert "Prognoza" not in client.get("/day/2026-10-01").text
