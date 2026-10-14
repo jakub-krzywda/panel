@@ -1,0 +1,10 @@
+{# Okno 7 dni w widoku dziennym — logika w DziennikCharts.timeline. #}
+<div class="timeline" data-timeline hidden>
+  <button type="button" class="btn-icon" data-step="-7" title="Tydzień wcześniej" aria-label="Tydzień wcześniej">«</button>
+  <button type="button" class="btn-icon" data-step="-1" title="Dzień wcześniej" aria-label="Dzień wcześniej">‹</button>
+  <input type="range" min="0" step="1" value="0" aria-label="Początek okna 7 dni">
+  <button type="button" class="btn-icon" data-step="1" title="Dzień później" aria-label="Dzień później">›</button>
+  <button type="button" class="btn-icon" data-step="7" title="Tydzień później" aria-label="Tydzień później">»</button>
+  <label class="small muted">od <input type="date" aria-label="Pierwszy dzień okna"></label>
+  <output class="small" data-range aria-live="polite"></output>
+</div>

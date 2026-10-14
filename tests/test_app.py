@@ -117,10 +117,25 @@ def test_stats_page(client, session):
     session.add(Day(date=dt.date(2026, 9, 23), source="manual", pomodoro_count=2,
                     habits=[HabitEntry(habit="trening", value=1)]))
     session.commit()
-    for period in ("week", "month", "nonsense"):
-        r = client.get(f"/stats?period={period}")
-        assert r.status_code == 200
-        assert 'data-habit="trening"' in r.text
+    for period in ("day", "week", "month", "nonsense"):
+        assert client.get(f"/stats?period={period}").status_code == 200
+    # wykresy per nawyk tylko w miesiącach; dzień = kratki, tydzień = jedna linia sumy
+    assert 'data-habit="trening"' in client.get("/stats?period=month").text
+    assert 'data-habit="trening"' not in client.get("/stats?period=week").text
+    assert 'class="timeline" data-timeline' in client.get("/stats?period=day").text
+    assert 'class="timeline" data-timeline' not in client.get("/stats?period=week").text
+    assert 'id="habit-grid"' in client.get("/stats?period=day").text
+    assert 'id="checked"' in client.get("/stats?period=week").text
+
+
+def test_stats_page_weekly_summary(client, session):
+    session.add(Day(date=dt.date(2026, 9, 23), source="manual", pomodoro_count=5,
+                    habits=[HabitEntry(habit="trening", value=1)]))
+    session.commit()
+    week = client.get("/stats?period=week").text
+    assert "Zestawienie tygodniowe" in week and "<strong>T39</strong>" in week
+    assert "bieżący" in week  # 23.09 w tym samym tygodniu co `today` z fixture (24.09)
+    assert "Zestawienie tygodniowe" not in client.get("/stats?period=month").text
     assert client.get("/static/chart-4.4.7.umd.min.js").status_code == 200
 
 
@@ -128,7 +143,7 @@ def test_stats_page_hides_legacy_habits_by_default(client, session):
     session.add(Day(date=dt.date(2026, 9, 23), source="pdf_import",
                     habits=[HabitEntry(habit="trening", value=1), HabitEntry(habit="dieta", value=0.5)]))
     session.commit()
-    html = client.get("/stats").text
+    html = client.get("/stats?period=month").text
     before_legacy, legacy = html.split('<details id="legacy"', 1)
     assert 'data-habit="trening"' in before_legacy
     assert 'data-habit="dieta"' not in before_legacy

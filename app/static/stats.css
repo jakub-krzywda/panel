@@ -49,3 +49,46 @@
 #widget > h2 { flex-wrap: wrap; }
 @media (max-width: 600px) { #widget { padding: 12px; } .slot { padding: 8px; } .slot .chart { height: 240px; } }
 .slot { grid-template-columns: minmax(0, 1fr); }
+
+/* Oś czasu widoku dziennego: okno 7 dni przesuwane o dzień. */
+.timeline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; margin-bottom: 12px;
+            border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.timeline input[type=range] { flex: 1 1 160px; min-width: 120px; accent-color: var(--accent); }
+.timeline input[type=date] { font: inherit; font-size: .85rem; color: var(--fg); background: var(--surface);
+                             border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; }
+.timeline output { font-weight: 600; font-variant-numeric: tabular-nums; min-width: 12em; }
+.btn-icon { min-width: 32px; height: 30px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--line);
+            background: var(--surface); color: var(--fg); font: inherit; cursor: pointer; }
+.btn-icon:hover:not(:disabled) { border-color: var(--muted); }
+.btn-icon:disabled { opacity: .4; cursor: default; }
+
+/* Zestawienie tygodniowe */
+.week-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.week-card { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); }
+.week-card h3 { margin: 0 0 8px; font-size: 1rem; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.week-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-size: .9rem; }
+.week-card dt { color: var(--muted); }
+.week-card dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.weekly td.num, .weekly th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.weekly td:first-child { white-space: nowrap; }
+.badge { font-size: .75rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+
+/* Widok dzienny: kratki nawyków (odhaczone = kolor nawyku, reszta pusta jak w notesie). */
+.habit-grid { width: 100%; border-collapse: separate; border-spacing: 4px; table-layout: fixed; font-size: .8rem; }
+.habit-grid th, .habit-grid td { padding: 0; border: 0; text-align: center; background: none !important;
+                                 text-transform: none; letter-spacing: 0; }
+.habit-grid thead th { font-weight: 500; color: var(--muted); line-height: 1.2; padding-bottom: 2px; }
+.habit-grid thead a { color: inherit; }
+.habit-grid tbody th, .habit-grid tfoot th { text-align: left; font-weight: 500; white-space: nowrap;
+                                              overflow: hidden; text-overflow: ellipsis; }
+.habit-grid thead th:first-child { width: 7.5em; }  /* table-layout: fixed bierze szerokości z 1. wiersza */
+@media (max-width: 600px) { .habit-grid thead th:first-child { width: 6em; } .habit-grid { border-spacing: 3px; } }
+.habit-grid tfoot td, .habit-grid tfoot th { color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.hg { display: block; margin: 0 auto; width: 100%; max-width: 34px; aspect-ratio: 1; border-radius: 5px;
+      background: var(--seq-0); }
+.hg.on { background: var(--c); }
+.slot .habit-box { background: var(--surface); border-radius: 10px; padding: 8px; }
+.slot-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.slot-head select { flex: 1 1 180px; width: auto; }
+.slot .timeline { margin: 0; padding: 6px 8px; background: var(--surface); }
+.slot .timeline output { min-width: 0; }

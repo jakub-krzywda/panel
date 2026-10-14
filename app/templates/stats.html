@@ -13,11 +13,51 @@
   </span>
 </div>
 
+{% if period == "day" %}{% include "_timeline.html" %}{% endif %}
+
+{% if weekly %}
+{% macro week_stats(w) %}
+  <dl>
+    <dt>Dni z wpisem</dt><dd>{{ w.days }}/7</dd>
+    {% for habit, pct in w.habits.items() %}<dt>{{ habit_label(habit) }}</dt><dd>{{ "–" if pct is none else pct ~ "%" }}</dd>{% endfor %}
+    <dt>Pomodoro</dt><dd>{{ w.pomodoro }}</dd>
+    <dt>Spacery 13:00 / 20:00</dt><dd>{{ w.walk_1300 }} / {{ w.walk_2000 }}</dd>
+    <dt>Ciśnienie rano</dt><dd>{{ w.bp_morning or "–" }}</dd>
+    <dt>Ciśnienie wieczorem</dt><dd>{{ w.bp_evening or "–" }}</dd>
+    <dt>Śr. temp. maks.</dt><dd>{{ "–" if w.temp_max is none else w.temp_max ~ " °C" }}</dd>
+  </dl>
+{% endmacro %}
+<section class="card">
+  <h2>Zestawienie tygodniowe</h2>
+  <div class="week-cards">
+    {% for w in weekly[:2] %}
+    <div class="week-card">
+      <h3>{{ w.week }} <span class="muted small">{{ w.label.split(" · ")[1] }}</span>
+        {% if w.start == this_week %}<span class="badge">bieżący</span>{% endif %}</h3>
+      {{ week_stats(w) }}
+    </div>
+    {% else %}<p class="muted">Brak wpisów.</p>{% endfor %}
+  </div>
+</section>
+{% endif %}
+
 <section class="card">
   <h2>Kalendarz — udział wykonanych nawyków</h2>
   {% include "_calendar.html" %}
 </section>
 
+{% if period == "day" %}
+<section class="card">
+<h2>Nawyki — kratki z dziennika</h2>
+<div id="habit-grid"></div>
+</section>
+{% elif period == "week" %}
+<section class="card">
+<h2>Nawyki — odhaczone w dniu</h2>
+<div class="chart-md"><canvas id="checked" role="img" aria-label="Liczba zaznaczonych nawyków w tygodniu"></canvas></div>
+<p class="muted small">Punkt = liczba odhaczonych nawyków danego dnia; gruba linia = średnia z 7 dni. Procenty per nawyk — w tabeli tygodni niżej.</p>
+</section>
+{% else %}
 <section class="card">
 <h2>Nawyki — % wykonania</h2>
 <div class="multiples">
@@ -47,6 +87,7 @@
   </div>
 </details>
 </section>{% endif %}
+{% endif %}
 
 <div class="cols-2" style="margin-top:16px">
   <section class="card"><h2>Pomodoro — suma</h2>
@@ -62,6 +103,31 @@
     <div class="chart-md"><canvas id="temp" role="img" aria-label="Średnia temperatura maksymalna"></canvas></div></section>
 </div>
 
+{% if weekly %}
+<section class="card">
+<details open>
+  <summary>Wszystkie tygodnie — {{ weekly | length }}</summary>
+  <div class="table-wrap">
+  <table class="weekly">
+    <thead><tr><th>Tydzień</th><th class="num">Dni</th>
+      {% for habit in weekly[0].habits %}<th class="num">{{ habit_label(habit) }}</th>{% endfor %}
+      <th class="num">Pomodoro</th><th class="num">Spacery 13 / 20</th><th class="num">Ciśn. rano</th>
+      <th class="num">Ciśn. wiecz.</th><th class="num">Temp. maks.</th></tr></thead>
+    <tbody>
+    {% for w in weekly %}
+      <tr><td><strong>{{ w.week }}</strong> <span class="muted small">{{ w.label.split(" · ")[1] }}{% if w.start.year != this_week.year %} {{ w.start.year }}{% endif %}</span></td>
+        <td class="num">{{ w.days }}/7</td>
+        {% for pct in w.habits.values() %}<td class="num">{{ "–" if pct is none else pct ~ "%" }}</td>{% endfor %}
+        <td class="num">{{ w.pomodoro }}</td><td class="num">{{ w.walk_1300 }} / {{ w.walk_2000 }}</td>
+        <td class="num">{{ w.bp_morning or "–" }}</td><td class="num">{{ w.bp_evening or "–" }}</td>
+        <td class="num">{{ "–" if w.temp_max is none else w.temp_max ~ " °C" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</details>
+</section>
+{% elif period == "month" %}
 <section class="card">
 <details>
   <summary>Tabela</summary>
@@ -78,22 +144,48 @@
   </div>
 </details>
 </section>
+{% endif %}
 </div>
 
 <script src="{{ static('chart-4.4.7.umd.min.js') }}"></script>
 <script src="{{ static('charts.js') }}"></script>
 <script>
-  const data = {{ data | tojson }};
+  const full = {{ data | tojson }};
   const root = document.getElementById("viz");
+  let data = full;
+  const legacy = document.getElementById("legacy");
+  const habitSlots = {{ habit_slots | tojson }};
+  const habitLabels = {{ habit_labels | tojson }};
+  const allHabits = [...full.habits.current, ...full.habits.legacy];
   const drawHabits = (selector) => document.querySelectorAll(selector).forEach(
     (c) => DziennikCharts.habit(c, data.habits, c.dataset.habit, root));
-  drawHabits("canvas[data-habit]:not([data-lazy])");
+
+  function drawAll() {
+    const grid = document.getElementById("habit-grid");
+    if (grid) DziennikCharts.habitGrid(grid, data.habits, allHabits, habitSlots, habitLabels);
+    const checked = document.getElementById("checked");
+    if (checked) DziennikCharts.checkedLine(checked, data.habits_daily, allHabits, root);
+    drawHabits("canvas[data-habit]:not([data-lazy])");
+    if (legacy?.open) drawHabits("canvas[data-lazy]");
+    DziennikCharts.pomodoro(document.getElementById("pomodoro"), data.activity, root);
+    DziennikCharts.walks(document.getElementById("walks"), data.activity, root);
+    const bp = document.getElementById("bp");
+    if (bp) DziennikCharts.bloodPressure(bp, data.bp, root);
+    DziennikCharts.temperature(document.getElementById("temp"), data.weather, root);
+  }
+
+  // Widok dzienny: wszystkie wykresy pokazują to samo okno 7 dni.
+  const WINDOW = 7;
+  const tl = document.querySelector("[data-timeline]");
+  if (tl) {
+    tl.hidden = false;
+    const cut = (i) => Object.fromEntries(Object.entries(full).map(
+      ([k, v]) => [k, v && typeof v === "object" ? DziennikCharts.slice(v, i, i + WINDOW) : v]));
+    const t = DziennikCharts.timeline(tl, full.habits.dates, WINDOW, null, (i) => { data = cut(i); drawAll(); });
+    data = cut(t.index);
+  }
+  drawAll();
   // Ukryte wykresy mają zerowy rozmiar — rysujemy dopiero po rozwinięciu.
-  document.getElementById("legacy")?.addEventListener("toggle", (e) => e.target.open && drawHabits("canvas[data-lazy]"), { once: true });
-  DziennikCharts.pomodoro(document.getElementById("pomodoro"), data.activity, root);
-  DziennikCharts.walks(document.getElementById("walks"), data.activity, root);
-  const bp = document.getElementById("bp");
-  if (bp) DziennikCharts.bloodPressure(bp, data.bp, root);
-  DziennikCharts.temperature(document.getElementById("temp"), data.weather, root);
+  legacy?.addEventListener("toggle", (e) => e.target.open && drawHabits("canvas[data-lazy]"));
 </script>
 {% endblock %}

@@ -1,7 +1,7 @@
-{# Strona główna: dwie statystyki obok siebie do porównań (wspólny okres → zgodne osie czasu).
-   Wymaga: widget ({week: data, month: data}), calendar, months, periods, habit_slots. #}
+{# Strona główna: dwie statystyki obok siebie do porównań; każda ma własny okres i okno dni.
+   Wymaga: widget ({day|week|month: data}), calendar, months, periods, habit_slots. #}
 {% set views = [
-  ("habits", "Nawyki — % wykonania"),
+  ("habits", "Nawyki"),
   ("calendar", "Kalendarz dni"),
   ("pomodoro", "Pomodoro"),
   ("walks", "Spacery z psami"),
@@ -12,22 +12,23 @@
 <section class="card viz" id="widget">
   <h2>
     <span>Statystyki</span>
-    <span class="row">
-      <span class="segmented" role="radiogroup" aria-label="Okres">
-        {% for key, label in periods.items() %}
-          <label><input type="radio" name="widget-period" value="{{ key }}">{{ label }}</label>
-        {% endfor %}
-      </span>
-      <a href="/stats" class="small">wszystkie →</a>
-    </span>
+    <a href="/stats" class="small">wszystkie →</a>
   </h2>
 
   <div class="cols-2">
     {% for slot in range(2) %}
     <div class="slot" data-slot="{{ slot }}">
-      <select class="slot-view" aria-label="Statystyka {{ slot + 1 }}">
-        {% for key, label in views %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
-      </select>
+      <div class="slot-head">
+        <select class="slot-view" aria-label="Statystyka {{ slot + 1 }}">
+          {% for key, label in views %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+        <span class="segmented" role="radiogroup" aria-label="Okres — statystyka {{ slot + 1 }}">
+          {% for key, label in periods.items() %}
+            <label><input type="radio" name="period-{{ slot }}" value="{{ key }}">{{ label }}</label>
+          {% endfor %}
+        </span>
+      </div>
+      {% include "_timeline.html" %}
       <div class="pills habit-picker" hidden>
         {% for habit in widget.week.habits.current %}
           <label class="pill">
@@ -36,6 +37,7 @@
           </label>
         {% endfor %}
       </div>
+      <div class="habit-box" data-grid hidden></div>
       <div class="chart" data-chart><canvas role="img" aria-label="Wykres statystyki {{ slot + 1 }}"></canvas></div>
       <div class="calendar-box" data-calendar hidden>{% include "_calendar.html" %}</div>
     </div>
@@ -53,57 +55,82 @@
   const root = document.getElementById("widget");
   const KEY = "dziennik.widget.v2";
   const allHabits = data.week.habits.current;
+  const WINDOW = 7;
 
   // Stan pamiętany per przeglądarka; localStorage bywa niedostępny (tryb prywatny) — wtedy domyślny.
-  let state = { period: "week", slots: [{ view: "habits", habits: allHabits }, { view: "walks", habits: allHabits }] };
+  // Per panel: period oraz windowStart = pierwszy dzień okna w widoku dziennym (null = ostatnie 7 dni).
+  const slotDefaults = (view) => ({ view, period: "week", windowStart: null, habits: allHabits });
+  let state = { slots: [slotDefaults("habits"), slotDefaults("walks")] };
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (saved && Array.isArray(saved.slots) && saved.slots.length === 2) state = saved;
+    if (saved && Array.isArray(saved.slots) && saved.slots.length === 2) {
+      // Starszy zapis miał jeden wspólny okres i okno dla obu paneli.
+      state = { slots: saved.slots.map((s) => ({ ...slotDefaults(s.view), period: saved.period ?? "week",
+                                                  windowStart: saved.windowStart ?? null, ...s })) };
+    }
   } catch {}
 
-  const PERIODLESS = new Set(["calendar", "bp"]);
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} };
 
-  function renderSlot(el, s) {
-    const view = s.view;
-    el.querySelector(".slot-view").value = view;
-    const picker = el.querySelector(".habit-picker");
-    picker.hidden = view !== "habits";
-    picker.querySelectorAll("input").forEach((i) => { i.checked = s.habits.includes(i.value); });
-    el.querySelector("[data-calendar]").hidden = view !== "calendar";
-    el.querySelector("[data-chart]").hidden = view === "calendar";
-
-    const canvas = el.querySelector("canvas");
-    const d = data[state.period];
-    switch (view) {
-      case "habits": {
-        const chosen = allHabits.filter((h) => s.habits.includes(h));
-        DziennikCharts.habitLines(canvas, d.habits, chosen, slotsMap, labels, root);
-        break;
-      }
-      case "pomodoro": DziennikCharts.pomodoro(canvas, d.activity, root); break;
-      case "walks": DziennikCharts.walks(canvas, d.activity, root); break;
-      case "bp": DziennikCharts.bloodPressure(canvas, d.bp, root); break;
-      case "temp": DziennikCharts.temperature(canvas, d.weather, root); break;
-      case "precip": DziennikCharts.precipitation(canvas, d.weather, root); break;
-    }
+  // Dane dla okresu panelu; w widoku dziennym przycięte do jego okna.
+  function slotData(s, windowIndex) {
+    const d = data[s.period];
+    if (s.period !== "day") return d;
+    return Object.fromEntries(Object.entries(d).map(
+      ([k, v]) => [k, v && typeof v === "object" ? DziennikCharts.slice(v, windowIndex, windowIndex + WINDOW) : v]));
   }
 
-  function render() {
-    root.querySelectorAll("input[name=widget-period]").forEach((i) => { i.checked = i.value === state.period; });
-    root.querySelectorAll(".slot").forEach((el) => renderSlot(el, state.slots[+el.dataset.slot]));
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
-  }
-
-  root.querySelectorAll("input[name=widget-period]").forEach((i) =>
-    i.addEventListener("change", () => { state.period = i.value; render(); }));
   root.querySelectorAll(".slot").forEach((el) => {
-    const s = () => state.slots[+el.dataset.slot];
-    el.querySelector(".slot-view").addEventListener("change", (e) => { s().view = e.target.value; render(); });
+    const s = state.slots[+el.dataset.slot];
+    const canvas = el.querySelector("canvas");
+    const tl = el.querySelector("[data-timeline]");
+    const timeline = DziennikCharts.timeline(tl, data.day.habits.dates, WINDOW, s.windowStart, (i, iso, latest) => {
+      s.windowStart = latest ? null : iso;
+      render();
+    });
+
+    function render() {
+      const { view, period } = s;
+      el.querySelector(".slot-view").value = view;
+      el.querySelectorAll(`input[name=period-${el.dataset.slot}]`).forEach((i) => { i.checked = i.value === period; });
+      const picker = el.querySelector(".habit-picker");
+      picker.hidden = view !== "habits";
+      picker.querySelectorAll("input").forEach((i) => { i.checked = s.habits.includes(i.value); });
+      // Kalendarz nie ma okresu; nawyki w widoku dziennym to kratki, nie wykres.
+      const grid = view === "habits" && period === "day";
+      el.querySelector(".segmented").hidden = view === "calendar";
+      tl.hidden = period !== "day" || view === "calendar";
+      el.querySelector("[data-calendar]").hidden = view !== "calendar";
+      el.querySelector("[data-grid]").hidden = !grid;
+      el.querySelector("[data-chart]").hidden = view === "calendar" || grid;
+
+      const d = slotData(s, timeline.index);
+      switch (view) {
+        case "habits": {
+          const chosen = allHabits.filter((h) => s.habits.includes(h));
+          if (period === "day")
+            DziennikCharts.habitGrid(el.querySelector("[data-grid]"), d.habits, chosen, slotsMap, labels, { always: true });
+          else if (period === "week") DziennikCharts.checkedLine(canvas, d.habits_daily, chosen, root);
+          else DziennikCharts.habitLines(canvas, d.habits, chosen, slotsMap, labels, root);
+          break;
+        }
+        case "pomodoro": DziennikCharts.pomodoro(canvas, d.activity, root); break;
+        case "walks": DziennikCharts.walks(canvas, d.activity, root); break;
+        case "bp": DziennikCharts.bloodPressure(canvas, d.bp, root); break;
+        case "temp": DziennikCharts.temperature(canvas, d.weather, root); break;
+        case "precip": DziennikCharts.precipitation(canvas, d.weather, root); break;
+      }
+      save();
+    }
+
+    el.querySelectorAll(`input[name=period-${el.dataset.slot}]`).forEach((i) =>
+      i.addEventListener("change", () => { s.period = i.value; render(); }));
+    el.querySelector(".slot-view").addEventListener("change", (e) => { s.view = e.target.value; render(); });
     el.querySelectorAll(".habit-picker input").forEach((i) => i.addEventListener("change", () => {
-      s().habits = [...el.querySelectorAll(".habit-picker input:checked")].map((x) => x.value);
+      s.habits = [...el.querySelectorAll(".habit-picker input:checked")].map((x) => x.value);
       render();
     }));
+    render();
   });
-  render();
 })();
 </script>

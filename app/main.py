@@ -90,8 +90,11 @@ def _stats_data(days: list[Day], period: str) -> dict:
     names = sorted(habits["series"], key=habit_order)
     habits["current"] = [h for h in names if h in CURRENT_HABITS]
     habits["legacy"] = [h for h in names if h not in CURRENT_HABITS]
-    return {"habits": habits, "activity": stats.activity(days, period), "bp": stats.blood_pressure(days),
-            "weather": stats.weather(days, period)}
+    data = {"period": period, "habits": habits, "activity": stats.activity(days, period),
+            "bp": stats.blood_pressure(days, period), "weather": stats.weather(days, period)}
+    if period == "week":  # linia nawyków w widoku tygodniowym ma punkty dzienne
+        data["habits_daily"] = stats.habit_rates(days, "day")
+    return data
 
 
 async def _forecast(date: dt.date) -> dict | None:
@@ -257,13 +260,18 @@ def stats_page(request: Request, period: str = "week", session: Session = Depend
     if period not in stats.PERIODS:
         period = "week"
     days = session.scalars(select(Day).order_by(Day.date)).all()
+    data = _stats_data(days, period)
     return templates.TemplateResponse(
         request,
         "stats.html",
         {
             "period": period,
             "periods": stats.PERIODS,
-            "data": _stats_data(days, period),
+            "data": data,
+            "weekly": stats.weekly_summary(days, CURRENT_HABITS) if period == "week" else None,
+            "this_week": stats.period_start(today(), "week"),
+            "habit_slots": {name: i for i, name in enumerate(CURRENT_HABITS)},
+            "habit_labels": {name: habit_label(name) for name in data["habits"]["current"] + data["habits"]["legacy"]},
             "calendar": stats.calendar(days, today()),
             "months": stats.MONTHS_PL,
             "day_count": len(days),

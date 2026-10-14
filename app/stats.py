@@ -1,4 +1,4 @@
-"""Agregacje do wykresów: tydzień / miesiąc + kalendarz dni."""
+"""Agregacje do wykresów: dzień / tydzień / miesiąc + kalendarz dni i zestawienie tygodniowe."""
 
 import datetime as dt
 from collections import defaultdict
@@ -6,37 +6,60 @@ from collections.abc import Sequence
 
 from app.models import Day
 
-PERIODS = {"week": "Tygodnie", "month": "Miesiące"}
+PERIODS = {"day": "Dni", "week": "Tygodnie", "month": "Miesiące"}
 MONTHS_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"]
+WEEKDAYS_PL = ["pn", "wt", "śr", "cz", "pt", "sb", "nd"]
 
 
 def period_start(d: dt.date, period: str) -> dt.date:
+    if period == "day":
+        return d
     if period == "month":
         return d.replace(day=1)
     return d - dt.timedelta(days=d.weekday())  # poniedziałek
 
 
 def _next_period(d: dt.date, period: str) -> dt.date:
+    if period == "day":
+        return d + dt.timedelta(days=1)
     if period == "month":
         return (d.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
     return d + dt.timedelta(days=7)
 
 
+def week_number(start: dt.date) -> str:
+    """Numer tygodnia ISO (jak w polskich kalendarzach), np. „T42"."""
+    return f"T{start.isocalendar().week}"
+
+
 def period_label(start: dt.date, period: str) -> str:
+    if period == "day":
+        return f"{WEEKDAYS_PL[start.weekday()]} {start.strftime('%d.%m.%Y')}"
     if period == "month":
         return f"{MONTHS_PL[start.month - 1]} {start.year}"
-    return f"{start.strftime('%d.%m')}–{(start + dt.timedelta(days=6)).strftime('%d.%m')}"
+    end = start + dt.timedelta(days=6)
+    return f"{week_number(start)}/{start.isocalendar().year} · {start.strftime('%d.%m')}–{end.strftime('%d.%m')}"
 
 
 def period_tick(start: dt.date, period: str) -> str:
     """Krótki podpis osi X (pełny zakres jest w tooltipie)."""
     if period == "month":
         return MONTHS_PL[start.month - 1]
-    return start.strftime("%d.%m")
+    if period == "week":
+        return week_number(start)
+    return f"{WEEKDAYS_PL[start.weekday()]} {start.strftime('%d.%m')}"
 
 
 def _axis(periods: list[dt.date], period: str) -> dict:
-    return {"labels": [period_label(p, period) for p in periods], "ticks": [period_tick(p, period) for p in periods]}
+    """Oś czasu; `dates` (ISO) pozwala w przeglądarce wyciąć okno z widoku dziennego."""
+    axis = {
+        "labels": [period_label(p, period) for p in periods],
+        "ticks": [period_tick(p, period) for p in periods],
+        "dates": [p.isoformat() for p in periods],
+    }
+    if period == "day":  # dzienne punkty na wykresie tygodniowym podpisujemy numerem tygodnia
+        axis["weeks"] = [week_number(p) for p in periods]
+    return axis
 
 
 def _periods(days: Sequence[Day], period: str) -> list[dt.date]:
@@ -53,7 +76,8 @@ def _periods(days: Sequence[Day], period: str) -> list[dt.date]:
 
 
 def habit_rates(days: Sequence[Day], period: str) -> dict:
-    """% wykonania nawyku w okresie = suma wartości / liczba dni, w których nawyk był śledzony.
+    """% wykonania nawyku w okresie = suma wartości / liczba dni, w których nawyk był śledzony
+    (`series`) oraz sama suma wartości (`counts`).
 
     Nawyki zmieniały się między templatami, więc okres bez wpisów danego nawyku = brak punktu (None).
     """
@@ -66,7 +90,12 @@ def habit_rates(days: Sequence[Day], period: str) -> dict:
         habit: [round(100 * sum(v) / len(v)) if (v := by_period.get(p)) else None for p in periods]
         for habit, by_period in sorted(totals.items())
     }
-    return {**_axis(periods, period), "series": series}
+    # Liczba zaznaczonych kratek w okresie (do wykresu „ile nawyków odhaczonych w tygodniu").
+    counts = {
+        habit: [round(sum(v), 1) if (v := by_period.get(p)) else None for p in periods]
+        for habit, by_period in sorted(totals.items())
+    }
+    return {**_axis(periods, period), "series": series, "counts": counts}
 
 
 def activity(days: Sequence[Day], period: str) -> dict:
@@ -124,11 +153,22 @@ def calendar(days: Sequence[Day], end: dt.date) -> list[list[dict | None]]:
     return weeks
 
 
-def blood_pressure(days: Sequence[Day]) -> dict:
-    """Pomiary ciśnienia — tylko dni z odczytem (oś kategorii po datach, bez okresów)."""
+def blood_pressure(days: Sequence[Day], period: str | None = None) -> dict:
+    """Pomiary ciśnienia. Domyślnie tylko dni z odczytem (oś kategorii po datach, bez okresów);
+    dla `period="day"` na ciągłej osi dni (None = brak pomiaru), żeby dało się przesuwać okno razem z resztą."""
+    if period == "day":
+        by_date = {d.date: d for d in days}
+        axis = _axis(_periods(days, "day"), "day")
+        measured = [by_date.get(dt.date.fromisoformat(iso)) for iso in axis["dates"]]
+        return {
+            **axis,
+            **{key: [getattr(d, f"bp_{key}") if d else None for d in measured]
+               for key in ("morning_sys", "morning_dia", "evening_sys", "evening_dia")},
+        }
     measured = [d for d in days if d.bp_morning_sys or d.bp_evening_sys]
     return {
         "labels": [d.date.strftime("%d.%m") for d in measured],
+        "dates": [d.date.isoformat() for d in measured],
         "morning_sys": [d.bp_morning_sys for d in measured],
         "morning_dia": [d.bp_morning_dia for d in measured],
         "evening_sys": [d.bp_evening_sys for d in measured],
@@ -154,3 +194,47 @@ def weather(days: Sequence[Day], period: str) -> dict:
         "temp_max": [round(sum(t) / len(t), 1) if t else None for t in temps],
         "precip": precip,
     }
+
+
+def _mean(values: list) -> float | None:
+    values = [v for v in values if v is not None]
+    return sum(values) / len(values) if values else None
+
+
+def _bp(sys: list, dia: list) -> str | None:
+    """Średnie ciśnienie „SYS/DIA" z dni, w których był pomiar."""
+    s, d = _mean(sys), _mean(dia)
+    return f"{round(s)}/{round(d)}" if s is not None and d is not None else None
+
+
+def weekly_summary(days: Sequence[Day], habits: Sequence[str]) -> list[dict]:
+    """Zestawienie per tydzień (od najnowszego), tylko tygodnie z wpisami.
+
+    `habits` — które nawyki pokazać (aktualne z templatu); % liczony jak w `habit_rates`.
+    """
+    rates = habit_rates(days, "week")
+    act = activity(days, "week")
+    temp = weather(days, "week")
+    by_week: dict[dt.date, list[Day]] = defaultdict(list)
+    for d in days:
+        by_week[period_start(d.date, "week")].append(d)
+    rows = []
+    for i, iso in enumerate(rates["dates"]):
+        start = dt.date.fromisoformat(iso)
+        week_days = by_week.get(start)
+        if not week_days:
+            continue
+        rows.append({
+            "start": start,
+            "week": week_number(start),
+            "label": rates["labels"][i],
+            "days": act["days"][i],
+            "habits": {h: rates["series"].get(h, [None] * len(rates["dates"]))[i] for h in habits},
+            "pomodoro": act["pomodoro"][i],
+            "walk_1300": act["walk_1300"][i],
+            "walk_2000": act["walk_2000"][i],
+            "bp_morning": _bp([d.bp_morning_sys for d in week_days], [d.bp_morning_dia for d in week_days]),
+            "bp_evening": _bp([d.bp_evening_sys for d in week_days], [d.bp_evening_dia for d in week_days]),
+            "temp_max": temp["temp_max"][i],
+        })
+    return rows[::-1]
